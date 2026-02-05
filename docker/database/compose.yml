@@ -1,13 +1,18 @@
 services:
   api_app:
+    container_name: smartlock-api  
     build: 
       context: ../..
       dockerfile: docker/database/Dockerfile
     restart: unless-stopped
+    environment:
+      - PYTHONPATH=/app
     env_file:
       - .env
     ports:
       - "8000:8000"
+    volumes:
+      - ../../alembic/versions:/app/alembic/versions
     depends_on:
       postgres:
         condition: service_healthy

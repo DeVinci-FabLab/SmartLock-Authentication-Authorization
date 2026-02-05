@@ -1,7 +1,11 @@
 from pydantic import BaseModel, Field, ConfigDict
-from datetime import date
+from datetime import datetime
 from typing import Optional, List
 from .stock import StockResponse
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .stock import StockResponse
 
 class LockerBase(BaseModel):
     """Base schema for Locker with common fields"""
@@ -23,8 +27,8 @@ class LockerUpdate(BaseModel):
 class LockerResponse(LockerBase):
     """Schema for locker response"""
     id: int
-    created_at: Optional[date] = None
-    updated_at: Optional[date] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     
     model_config = ConfigDict(from_attributes=True)
 

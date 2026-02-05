@@ -1,7 +1,9 @@
 from pydantic import BaseModel, Field, ConfigDict
-from datetime import date
-from typing import Optional, List
-from .items import ItemResponse
+from datetime import datetime
+from typing import Optional, List, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .items import ItemResponse
 
 class CategoryBase(BaseModel):
     """Base schema for Category with common fields"""
@@ -21,8 +23,8 @@ class CategoryUpdate(BaseModel):
 class CategoryResponse(CategoryBase):
     """Schema for category response"""
     id: int
-    created_at: Optional[date] = None
-    updated_at: Optional[date] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     
     model_config = ConfigDict(from_attributes=True)
 
