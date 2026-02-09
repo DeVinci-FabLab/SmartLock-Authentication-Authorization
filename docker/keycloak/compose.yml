@@ -4,23 +4,20 @@ services:
     container_name: keycloak_web
     restart: unless-stopped
     volumes:
-      - ${DOCKER_VOLUMES_PATH}/keycloak/themes:/opt/keycloak/themes
       - ${DOCKER_VOLUMES_PATH}/keycloak/conf:/opt/keycloak/conf
     environment:
       KC_DB: ${KC_DB}
       KC_DB_URL: ${KC_DB_URL}
       KC_DB_USERNAME: ${KC_DB_USERNAME}
       KC_DB_PASSWORD: ${KC_DB_PASSWORD}
-
       KC_HOSTNAME: ${KC_HOSTNAME}
       KC_HOSTNAME_STRICT: ${KC_HOSTNAME_STRICT}
       KC_HTTP_ENABLED: ${KC_HTTP_ENABLED}
-
       KC_PROXY_HEADERS: ${KC_PROXY_HEADERS}
-
       KC_LOG_LEVEL: ${KC_LOG_LEVEL}
       KC_METRICS_ENABLED: ${KC_METRICS_ENABLED}
       KC_HEALTH_ENABLED: ${KC_HEALTH_ENABLED}
+      KC_CACHE: ${KC_CACHE}
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD}
     command: start
@@ -30,7 +27,18 @@ services:
     expose:
       - 8080
     healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080;echo -e 'GET /health/ready HTTP/1.1\r\nhost: 127.0.0.1\r\nConnection: close\r\n\r\n' >&3;if [ $? -eq 0 ]; then echo 'Healthcheck Successful';exit 0;else echo 'Healthcheck Failed';exit 1;fi;"]
+      test:
+        - CMD-SHELL
+        - "exec 3<>/dev/tcp/127.0.0.1/8080;echo -e 'GET /health/ready HTTP/1.1\r
+
+          host: 127.0.0.1\r
+
+          Connection: close\r
+
+          \r
+
+          ' >&3;if [ $? -eq 0 ]; then echo 'Healthcheck
+          Successful';exit 0;else echo 'Healthcheck Failed';exit 1;fi;"
       interval: 30s
       timeout: 10s
       retries: 5
@@ -45,7 +53,6 @@ services:
           cpus: '0.5'
     networks:
       - keycloak-internal
-      - pangolin
 
   keycloakdb:
     image: postgres:15
@@ -60,7 +67,9 @@ services:
     expose:
       - 5432
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}
       interval: 10s
       timeout: 5s
       retries: 5
@@ -79,5 +88,4 @@ services:
 networks:
   keycloak-internal:
     driver: bridge
-  pangolin:
-    external: true
+
