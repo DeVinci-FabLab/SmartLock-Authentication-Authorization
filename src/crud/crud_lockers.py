@@ -1,7 +1,9 @@
+from typing import List
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.models.lockers import Lockers
+from src.models.stock import Stock
 from src.schemas.lockers import LockerCreate, LockerUpdate 
 from src.utils.logger import logger
 
@@ -44,6 +46,37 @@ def get_locker(db: Session, locker_id: int) -> Lockers | None:
         return locker
     except SQLAlchemyError as e:
         logger.error(f"Failed to fetch locker with ID {locker_id}: {e}")
+        raise
+    
+def get_locker_stock(db: Session, locker_id: int) -> List[Stock]:
+    """
+    Retrieve all stock items for a specific locker.
+    
+    Args:
+        db: Database session
+        locker_id: ID of the locker
+        
+    Returns:
+        List of Stock objects for the locker
+        
+    Raises:
+        SQLAlchemyError: If database query fails
+    """
+    logger.debug(f"Fetching stock for locker with ID: {locker_id}")
+    
+    try:
+        locker = db.query(Lockers).filter(Lockers.id == locker_id).first()
+        
+        if not locker:
+            logger.warning(f"Locker with ID {locker_id} not found")
+            return []
+        
+        stock = locker.stock  # Access via relationship
+        logger.info(f"Retrieved {len(stock)} stock items for locker {locker_id}")
+        return stock
+        
+    except SQLAlchemyError as e:
+        logger.error(f"Failed to fetch stock for locker {locker_id}: {e}")
         raise
 
 def update_locker(db: Session, locker_id: int, locker_update: LockerUpdate) -> Lockers | None:
