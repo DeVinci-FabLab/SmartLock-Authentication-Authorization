@@ -1,7 +1,7 @@
 import logging
 import sys
 
-from src.routes import categories, items, lockers, stock
+from src.routes import categories, items, lockers, stock, locker_permission
 from src.database.session import engine
 from src.database.base import Base 
 from src.utils.middleware_logger import LoggingMiddleware
@@ -146,6 +146,7 @@ app.include_router(categories.router)
 app.include_router(items.router)
 app.include_router(lockers.router)
 app.include_router(stock.router)
+app.include_router(locker_permission.router)
 
 
 if __name__ == "__main__":
