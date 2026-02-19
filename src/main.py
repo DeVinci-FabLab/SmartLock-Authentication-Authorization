@@ -1,7 +1,12 @@
 import logging
 import sys
 
-from src.routes import categories, items, lockers, stock
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware  # ADD THIS
+
+from src.routes import categories, items, lockers, stock, badge
 from src.database.session import engine
 from src.database.base import Base 
 from src.utils.middleware_logger import LoggingMiddleware
@@ -13,6 +18,9 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from contextlib import asynccontextmanager
+
+# Initialize limiter
+limiter = Limiter(key_func=get_remote_address)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -37,8 +45,14 @@ app = FastAPI(
     version="0.1.0",
     docs_url="/docs",
     lifespan=lifespan
-    )
+)
 
+# Configure rate limiter
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# ADD SLOWAPI MIDDLEWARE - This is crucial!
+app.add_middleware(SlowAPIMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -51,7 +65,7 @@ app.add_middleware(
 # Add logging middleware
 app.add_middleware(
     LoggingMiddleware,
-    log_request_body=False,  # Set to True for debugging (careful with sensitive data)
+    log_request_body=False,
     log_response_body=False,
 )
 
@@ -123,7 +137,8 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 
 @app.get("/health", tags=["System"])
-def health_check():
+@limiter.limit("60/minute")  # Changed to 60/minute for reasonable testing
+def health_check(request: Request):
     logger.info("Health check endpoint called")
     return {
         "status": "healthy", 
@@ -132,7 +147,8 @@ def health_check():
     }
     
 @app.get("/", tags=["System"])
-def root():
+@limiter.limit("100/minute") 
+def root(request: Request):  
     logger.info("Root endpoint called")
     return {
         "message": "Welcome to the Smartlock API",
@@ -146,6 +162,7 @@ app.include_router(categories.router)
 app.include_router(items.router)
 app.include_router(lockers.router)
 app.include_router(stock.router)
+app.include_router(badge.router)
 
 
 if __name__ == "__main__":
