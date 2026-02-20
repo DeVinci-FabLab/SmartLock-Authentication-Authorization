@@ -7,7 +7,7 @@ from sqlalchemy import pool
 from alembic import context
 
 from src.database.base import Base
-from src.models import categories, items, lockers, stock, locker_permission
+from src.models import categories, items, lockers, stock, locker_permission, pending_card  
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

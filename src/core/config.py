@@ -17,5 +17,8 @@ class Settings(BaseSettings):
         env_file_encoding='utf-8',
         case_sensitive=False
     )
+    
+    KEYCLOAK_URL: str = "https://auth.devinci-fablab.fr"
+    KEYCLOAK_REALM: str = "master"
 
 settings = Settings()
