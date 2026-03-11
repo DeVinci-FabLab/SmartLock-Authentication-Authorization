@@ -2,31 +2,22 @@
 
 Test that the API can authenticate as a service account and retrieve a user's `card_id` and roles.
 
-**Assumptions:** Keycloak is running and you can reach the admin console. You have an initial admin account.
+**Assumptions:** Keycloak is running, you can reach the admin console, and the `master` realm already exists. You have the initial admin account.
 
 ---
 
-## 1. Create the Realm
+## 1. Create Realm Roles
 
-1. Log in to the Keycloak admin console (e.g. `https://auth.devinci-fablab.fr` or `http://localhost:8080`)
-2. Top-left dropdown → **Create realm**
-3. Realm name: `fablab`
-4. **Enable** → **Create**
+Navigate to the `master` realm (top-left dropdown).
 
-All steps below happen inside the `fablab` realm. Make sure it's selected in the top-left dropdown.
-
----
-
-## 2. Create Realm Roles
-
-**Left menu → Realm roles → Create role**
+Left menu → **Realm roles** → **Create role**
 
 Create these two roles (one at a time):
 
-| Role name         | Description                      |
-| ----------------- | -------------------------------- |
-| `member`          | Base role for all fablab members |
-| `woodshop-member` | Access to woodshop lockers       |
+| Nom du rôle      | Description                          |
+| ---------------- | ------------------------------------ |
+| `membre`         | Rôle de base pour tous les adhérents |
+| `membre-atelier` | Accès aux casiers de l'atelier bois  |
 
 Steps for each:
 
@@ -35,26 +26,39 @@ Steps for each:
 
 ---
 
-## 3. Create Groups
+## 2. Create Groups
 
-**Left menu → Groups → Create group**
+Keycloak supports child groups that **inherit roles from their parent**. Use this instead of manually assigning base roles to every sub-group.
 
-| Group name      | Roles to assign             |
-| --------------- | --------------------------- |
-| `Members`       | `member`                    |
-| `Woodshop Team` | `member`, `woodshop-member` |
+Structure to create:
 
-Steps for each group:
+```plain
+Adhérents          (rôle : membre)
+└── Atelier        (rôle : membre-atelier)
+```
 
-1. Name → fill in → **Create**
-2. Click on the group → **Role mapping** tab → **Assign role**
-3. Search for the role(s) from the table above → select → **Assign**
+A user added to `Atelier` automatically gets `membre` (from the parent) + `membre-atelier` (from the child). Adding new workshops later only requires assigning their specific role — `membre` propagates for free.
+
+### Create the parent group
+
+Left menu → **Groups** → **Create group**
+
+- Name: `Adhérents` → **Create**
+- Click `Adhérents` → **Role mapping** tab → **Assign role** → select `membre` → **Assign**
+
+### Create the child group
+
+- Click `Adhérents` → **Sub groups** tab → **Create group**
+- Name: `Atelier` → **Create**
+- Click `Atelier` → **Role mapping** tab → **Assign role** → select `membre-atelier` → **Assign**
+
+> Do **not** assign `membre` to `Atelier` — it is inherited from `Adhérents` automatically.
 
 ---
 
-## 4. Add the `card_id` User Attribute
+## 3. Add the `card_id` User Attribute
 
-**Left menu → Realm settings → User profile tab → Create attribute**
+Left menu → **Realm settings** → **User profile** tab → **Create attribute**
 
 - Attribute name: `card_id`
 - Display name: `Card ID`
@@ -65,9 +69,9 @@ Steps for each group:
 
 ---
 
-## 5. Create a Test User
+## 4. Create a Test User
 
-**Left menu → Users → Create new user**
+Left menu → **Users** → **Create new user**
 
 Fill in:
 
@@ -78,49 +82,49 @@ Fill in:
 
 Then on the user page:
 
-**Set a password:**
+### Set a password
 
 - **Credentials** tab → **Set password**
 - Password: `test1234` (or anything)
 - Temporary: **Off**
 - **Save**
 
-**Set the card_id attribute:**
+### Set the card_id attribute
 
 - **Attributes** tab
 - Key: `card_id` / Value: `04:AB:CD:12:34:56:78`
 - **Save**
 
-**Add to group:**
+### Add to group
 
 - **Groups** tab → **Join Group**
-- Select `Woodshop Team` → **Join**
+- Select `Atelier` → **Join**
 
 ---
 
-## 6. Create the `smartlock-api` Client
+## 5. Create the `smartlock-api` Client
 
 This is the service account the Python code will use to query Keycloak.
 
-**Left menu → Clients → Create client**
+Left menu → **Clients** → **Create client**
 
-**Step 1 — General settings:**
+### Step 1 — General settings
 
 - Client type: `OpenID Connect`
 - Client ID: `smartlock-api`
 - **Next**
 
-**Step 2 — Capability config:**
+### Step 2 — Capability config
 
 - Client authentication: **On** (makes it confidential)
 - Authentication flow: uncheck everything **except** `Service accounts roles`
 - **Next → Save**
 
-**Get the client secret:**
+### Get the client secret
 
 - **Credentials** tab → copy the `Client secret` value — you'll need it in the Python script
 
-**Assign Admin API permissions to the service account:**
+### Assign Admin API permissions to the service account
 
 - **Service account roles** tab → **Assign role**
 - Filter by: `Filter by clients` → search `realm-management`
@@ -133,147 +137,69 @@ This is the service account the Python code will use to query Keycloak.
 
 ---
 
-## 7. Python Test Script
+## 6. Python Test Script
 
-Install the only dependency needed:
+The script lives at `sandbox/test_keycloak.py`.
+
+### Dependencies and .env file
+
+Install dependencies:
 
 ```bash
-pip install httpx
-# or: uv add httpx
+pip install httpx python-dotenv
 ```
 
-Create `test_keycloak.py`:
+Create `sandbox/.env`:
 
-```python
-import httpx
-
-# ── Config ────────────────────────────────────────────────────────────────────
-KEYCLOAK_URL  = "http://localhost:8080"   # change to your Keycloak URL
-REALM         = "fablab"
-CLIENT_ID     = "smartlock-api"
-CLIENT_SECRET = "PASTE_YOUR_SECRET_HERE"  # from step 6
-
-CARD_ID_TO_FIND = "04:AB:CD:12:34:56:78"
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-def get_service_account_token() -> str:
-    """Authenticate as the smartlock-api service account (client credentials flow)."""
-    url = f"{KEYCLOAK_URL}/realms/{REALM}/protocol/openid-connect/token"
-    resp = httpx.post(url, data={
-        "grant_type":    "client_credentials",
-        "client_id":     CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-    })
-    resp.raise_for_status()
-    token = resp.json()["access_token"]
-    print(f"[1] Got service account token (first 40 chars): {token[:40]}...")
-    return token
-
-
-def find_user_by_card_id(token: str, card_id: str) -> dict | None:
-    """Search Keycloak users by the card_id custom attribute."""
-    url = f"{KEYCLOAK_URL}/admin/realms/{REALM}/users"
-    resp = httpx.get(url, params={"q": f"card_id:{card_id}"}, headers={
-        "Authorization": f"Bearer {token}"
-    })
-    resp.raise_for_status()
-    users = resp.json()
-
-    if not users:
-        print(f"[2] No user found with card_id={card_id}")
-        return None
-
-    user = users[0]
-    print(f"[2] Found user: id={user['id']}  username={user['username']}")
-    print(f"    card_id attribute: {user.get('attributes', {}).get('card_id')}")
-    return user
-
-
-def get_user_realm_roles(token: str, user_id: str) -> list[str]:
-    """Retrieve the realm roles assigned to a user (directly + via groups)."""
-    url = f"{KEYCLOAK_URL}/admin/realms/{REALM}/users/{user_id}/role-mappings/realm"
-    resp = httpx.get(url, headers={"Authorization": f"Bearer {token}"})
-    resp.raise_for_status()
-    roles = [r["name"] for r in resp.json()]
-    print(f"[3] Realm roles: {roles}")
-    return roles
-
-
-def get_user_groups(token: str, user_id: str) -> list[dict]:
-    """Retrieve the groups a user belongs to."""
-    url = f"{KEYCLOAK_URL}/admin/realms/{REALM}/users/{user_id}/groups"
-    resp = httpx.get(url, headers={"Authorization": f"Bearer {token}"})
-    resp.raise_for_status()
-    groups = resp.json()
-    print(f"[4] Groups: {[g['name'] for g in groups]}")
-    return groups
-
-
-if __name__ == "__main__":
-    print(f"\nLooking up card_id: {CARD_ID_TO_FIND}\n")
-
-    token = get_service_account_token()
-    user  = find_user_by_card_id(token, CARD_ID_TO_FIND)
-
-    if user is None:
-        print("\nResult: card not registered — access denied")
-    else:
-        roles  = get_user_realm_roles(token, user["id"])
-        groups = get_user_groups(token, user["id"])
-
-        print(f"\n── Result ──────────────────────────────")
-        print(f"  User:   {user['firstName']} {user['lastName']} ({user['username']})")
-        print(f"  Roles:  {roles}")
-        print(f"  Groups: {[g['name'] for g in groups]}")
-
-        # Simulate a permission check against locker_permissions table logic
-        locker_permissions = {
-            "woodshop-member": {"can_open": True,  "can_view": True, "can_take": True},
-            "member":          {"can_open": False, "can_view": True, "can_take": False},
-        }
-        merged = {"can_open": False, "can_view": False, "can_take": False}
-        for role in roles:
-            if role in locker_permissions:
-                for perm, val in locker_permissions[role].items():
-                    merged[perm] = merged[perm] or val
-
-        print(f"  Permissions (simulated for locker 1): {merged}")
+```bash
+cd sandbox
+cp .env.example .env
 ```
 
-Run it:
+The script tests two card IDs in sequence: one registered (should find alice) and one unknown (should return denied).
+
+### Run it
 
 ```bash
 python test_keycloak.py
 ```
 
-**Expected output:**
+### Expected output
 
-```
-Looking up card_id: 04:AB:CD:12:34:56:78
+```plain
+[1] Token obtenu (40 premiers caractères) : eyJhbGciOiJSUzI1NiIsInR5cCIgOi...
 
-[1] Got service account token (first 40 chars): eyJhbGciOiJSUzI1NiIsInR5cCIgOi...
-[2] Found user: id=<uuid>  username=alice
-    card_id attribute: ['04:AB:CD:12:34:56:78']
-[3] Realm roles: ['default-roles-fablab', 'member', 'woodshop-member']
-[4] Groups: ['Woodshop Team']
+──────────────────────────────────────────────────
+Recherche du card_id : 04:AB:CD:12:34:56:78
+──────────────────────────────────────────────────
+[2] Utilisateur trouvé : id=<uuid>  username=alice
+    card_id : ['04:AB:CD:12:34:56:78']
+[3] Rôles effectifs : ['default-roles-master', 'membre', 'membre-atelier']
+[4] Groupes : ['Adhérents/Atelier']
 
-── Result ──────────────────────────────
-  User:   Alice  (alice)
-  Roles:  ['default-roles-fablab', 'member', 'woodshop-member']
-  Groups: ['Woodshop Team']
-  Permissions (simulated for locker 1): {'can_open': True, 'can_view': True, 'can_take': True}
+── Résultat ────────────────────────────
+  Utilisateur : Alice  (alice)
+  Rôles       : ['default-roles-master', 'membre', 'membre-atelier']
+  Groupes     : ['Adhérents/Atelier']
+  Permissions (simulation casier 1) : {'can_open': True, 'can_view': True, 'can_take': True}
+
+──────────────────────────────────────────────────
+Recherche du card_id : FF:FF:FF:FF:FF:FF:FF
+──────────────────────────────────────────────────
+[2] Aucun utilisateur trouvé avec card_id=FF:FF:FF:FF:FF:FF:FF
+Résultat : carte non enregistrée — accès refusé
 ```
 
 ---
 
-## 8. Common Errors
+## 7. Common Errors
 
-| Error                                      | Cause                                               | Fix                                                       |
-| ------------------------------------------ | --------------------------------------------------- | --------------------------------------------------------- |
-| `401 Unauthorized` on token request        | Wrong `CLIENT_SECRET`                               | Re-copy from Clients → smartlock-api → Credentials tab    |
-| `403 Forbidden` on Admin API call          | Service account missing roles                       | Re-check step 6 — Service account roles tab               |
-| Empty `[]` on user search                  | `card_id` attribute not searchable                  | Re-check step 4 — attribute must be saved in User Profile |
-| Empty `[]` on user search                  | Value has whitespace or wrong case                  | Copy the exact string set in step 5                       |
-| `400 Bad Request` on token                 | `Service accounts roles` not enabled on client      | Re-check step 6 capability config                         |
-| Roles list only has `default-roles-fablab` | User not in a group, or group has no roles assigned | Re-check steps 3 and 5                                    |
+| Erreur                                        | Cause                                               | Correction                                                                    |
+| --------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `401 Unauthorized` on token request           | Wrong `CLIENT_SECRET`                               | Re-copy from Clients → smartlock-api → Credentials tab                        |
+| `403 Forbidden` on Admin API call             | Service account missing roles                       | Re-check step 5 — Service account roles tab                                   |
+| Empty `[]` on user search                     | `card_id` attribute not searchable                  | Re-check step 3 — attribute must be saved in User Profile                     |
+| Empty `[]` on user search                     | Value has whitespace or wrong case                  | Copy the exact string set in step 4                                           |
+| `400 Bad Request` on token                    | `Service accounts roles` not enabled on client      | Re-check step 5 capability config                                             |
+| Roles list only has `default-roles-master`    | User not in a group, or group has no roles assigned | Re-check steps 2 and 4                                                        |
+| `membre` missing but `membre-atelier` present | Used `/realm` instead of `/realm/composite`         | The script uses `/composite` — double-check the URL in `get_user_realm_roles` |
