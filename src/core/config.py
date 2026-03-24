@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     ENVIRONMENT: str = "development"
     
+    KEYCLOAK_URL: str = ""
+    KEYCLOAK_REALM: str = "master"
+    
+    KEYCLOAK_CLIENT_ID: str = "smartlock-api"
+    KEYCLOAK_CLIENT_SECRET: str 
+    
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding='utf-8',
