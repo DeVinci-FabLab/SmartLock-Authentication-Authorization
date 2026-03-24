@@ -12,3 +12,4 @@ class Lockers(Base):
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
     
     stock = relationship("Stock", back_populates="locker")
+    permissions = relationship("Locker_Permission", back_populates="locker")

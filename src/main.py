@@ -1,12 +1,12 @@
 import logging
 import sys
 
+from src.routes import categories, items, lockers, stock, locker_permission, badge
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware  # ADD THIS
 
-from src.routes import categories, items, lockers, stock, badge
 from src.database.session import engine
 from src.database.base import Base 
 from src.utils.middleware_logger import LoggingMiddleware
@@ -162,6 +162,7 @@ app.include_router(categories.router)
 app.include_router(items.router)
 app.include_router(lockers.router)
 app.include_router(stock.router)
+app.include_router(locker_permission.router)
 app.include_router(badge.router)
 
 
