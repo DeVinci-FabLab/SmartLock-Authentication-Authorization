@@ -150,6 +150,7 @@ subject_type = Column(String, default="role")  # "role" or "user"
 Permission resolution rule: if a `subject_type="user"` row exists for this locker+user, it takes full precedence over any role-based rows.
 
 The existing `UniqueConstraint('role_name', 'locker_id')` needs to be replaced — a user-specific row has no `role_name`. Options:
+
 - Partial unique index: unique on `(role_name, locker_id)` WHERE `subject_type = 'role'`
 - Or split into two tables: `role_permissions` and `user_permission_overrides`
 
