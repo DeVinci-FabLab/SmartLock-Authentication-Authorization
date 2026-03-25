@@ -88,6 +88,23 @@ async def require_nfc_scanner(
         )
     return payload
 
+# -------------------------------------------------------------------
+# Dependency : réservé au client smartlock-lockers (Raspberry Pis)
+# -------------------------------------------------------------------
+async def require_locker_client(
+    payload: dict = Depends(validate_jwt),
+) -> dict:
+    """
+    Vérifie que le token appartient au client smartlock-lockers (les casiers physiques).
+    """
+    azp = payload.get("azp", "")
+    if azp != "smartlock-lockers":
+        logger.warning(f"Accès refusé — azp={azp} != smartlock-lockers")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès réservé aux terminaux physiques (casiers)",
+        )
+    return payload
 
 # -------------------------------------------------------------------
 # Dependency : réservé aux admins Keycloak

@@ -1,7 +1,7 @@
 import logging
 import sys
 
-from src.routes import categories, items, lockers, stock, locker_permission, badge
+from src.routes import categories, items, lockers, stock, locker_permission, badge, auth, users, access_log
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -164,6 +164,9 @@ app.include_router(lockers.router)
 app.include_router(stock.router)
 app.include_router(locker_permission.router)
 app.include_router(badge.router)
+app.include_router(auth.router) 
+app.include_router(users.router) 
+app.include_router(access_log.router) 
 
 
 if __name__ == "__main__":

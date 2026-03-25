@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 
@@ -7,7 +7,8 @@ from src.schemas.locker_permission import LockerPermissionCreate, LockerPermissi
 from src.utils.logger import logger
 
 def create_locker_permission(db: Session, permission: LockerPermissionCreate) -> Locker_Permission:
-    logger.info(f"Creating permission for role '{permission.role_name}' on locker ID {permission.locker_id}")
+    target = permission.user_id if permission.subject_type == 'user' else permission.role_name
+    logger.info(f"Creating permission for {permission.subject_type} '{target}' on locker ID {permission.locker_id}")
     try:
         db_permission = Locker_Permission(**permission.model_dump())
         db.add(db_permission)
@@ -18,10 +19,9 @@ def create_locker_permission(db: Session, permission: LockerPermissionCreate) ->
         return db_permission
     
     except IntegrityError as e:
-        # On intercepte spécifiquement le doublon ici !
-        logger.warning(f"Permission already exists for this role/locker combination.")
+        logger.warning(f"Permission already exists for this target/locker combination.")
         db.rollback()
-        raise ValueError("A permission for this role and locker already exists.")
+        raise ValueError("A permission for this target and locker already exists.")
         
     except SQLAlchemyError as e:
         logger.error(f"Failed to create locker permission: {e}")
@@ -46,18 +46,18 @@ def get_locker_permission(db: Session, permission_id: int) -> Locker_Permission 
         logger.error(f"Failed to fetch locker permission with ID {permission_id}: {e}")
         raise
 
-def get_locker_permissions(db: Session, skip: int = 0, limit: int = 100) -> Locker_Permission | None:
+def get_locker_permissions(db: Session, skip: int = 0, limit: int = 100) -> List[Locker_Permission]:
     """Retrieve a list of lockers permissions from the database."""
-    logger.debug(f"Fetching lockers with skip={skip} and limit={limit}")
+    logger.debug(f"Fetching locker permissions with skip={skip} and limit={limit}")
     try:
         lockers_permissions = db.query(Locker_Permission).offset(skip).limit(limit).all()
         logger.info(f"Fetched {len(lockers_permissions)} locker permissions successfully")
         return lockers_permissions
     except SQLAlchemyError as e:
-        logger.error(f"Failed to fetch lockers: {e}")
+        logger.error(f"Failed to fetch locker permissions: {e}")
         raise
 
-def get_locker_permissions_by_locker(db: Session, locker_id: str) -> List[Locker_Permission]:
+def get_locker_permissions_by_locker(db: Session, locker_id: int) -> List[Locker_Permission]:
     """Retrieve all permissions associated with a specific locker."""
     logger.debug(f"Fetching permissions for locker ID: '{locker_id}'")
     try:
@@ -68,18 +68,31 @@ def get_locker_permissions_by_locker(db: Session, locker_id: str) -> List[Locker
         logger.error(f"Failed to fetch permissions for locker ID '{locker_id}': {e}")
         raise
 
-def get_permission_by_role_and_locker(db: Session, role_name: str, locker_id: str) -> Locker_Permission | None:
-    """Retrieve a specific permission by role name and locker ID."""
-    logger.debug(f"Fetching permission for role '{role_name}' on locker ID '{locker_id}'")
+def get_permission_by_target_and_locker(
+    db: Session, 
+    locker_id: int, 
+    subject_type: str, 
+    role_name: Optional[str] = None, 
+    user_id: Optional[str] = None
+) -> Locker_Permission | None:
+    """Retrieve a specific permission by target (role or user) and locker ID."""
+    target = user_id if subject_type == 'user' else role_name
+    logger.debug(f"Fetching permission for {subject_type} '{target}' on locker ID '{locker_id}'")
     try:
-        permission = db.query(Locker_Permission).filter(
-            Locker_Permission.role_name == role_name,
-            Locker_Permission.locker_id == locker_id
-        ).first()
-        if permission:
-            logger.info(f"Found permission for role '{role_name}' on locker ID '{locker_id}'")
+        query = db.query(Locker_Permission).filter(
+            Locker_Permission.locker_id == locker_id,
+            Locker_Permission.subject_type == subject_type
+        )
+        if subject_type == "role":
+            query = query.filter(Locker_Permission.role_name == role_name)
         else:
-            logger.warning(f"No permission found for role '{role_name}' on locker ID '{locker_id}'")
+            query = query.filter(Locker_Permission.user_id == user_id)
+            
+        permission = query.first()
+        if permission:
+            logger.info(f"Found permission for {subject_type} '{target}' on locker ID '{locker_id}'")
+        else:
+            logger.warning(f"No permission found for {subject_type} '{target}' on locker ID '{locker_id}'")
         return permission
     except SQLAlchemyError as e:
         logger.error(f"Failed to fetch permissions for locker ID '{locker_id}': {e}")
