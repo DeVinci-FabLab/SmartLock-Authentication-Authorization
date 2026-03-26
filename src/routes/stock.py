@@ -93,7 +93,9 @@ def update_stock(
     logger.info(f"PUT /stock/{stock_id} called")
 
     try:
-        stock = crud_stock.update_stock(db, stock_id=stock_id, stock_update=stock_update)
+        stock = crud_stock.update_stock(
+            db, stock_id=stock_id, stock_update=stock_update
+        )
         if stock is None:
             logger.warning(f"Stock entry with ID {stock_id} not found for update")
             raise HTTPException(status_code=404, detail="Stock entry not found")

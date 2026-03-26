@@ -14,6 +14,7 @@ request_id_var: ContextVar[str] = ContextVar("request_id", default="")
 
 class LogConfig:
     """Logger configuration"""
+
     LEVEL = "INFO"
     ROTATION = "500 MB"
     RETENTION = "30 days"
@@ -23,7 +24,7 @@ class LogConfig:
 def file_formatter(record: dict) -> str:
     """Plain text formatter for file output - no angle brackets"""
     request_id = record["extra"].get("request_id", "-")
-    
+
     # Plain text format - NO angle brackets that could be parsed
     return (
         f"{record['time']:YYYY-MM-DD HH:mm:ss.SSS} | "
@@ -44,16 +45,16 @@ def serialize_record(record: dict) -> str:
         "function": record["function"],
         "line": record["line"],
     }
-    
+
     if record["extra"]:
         subset["extra"] = record["extra"]
-    
+
     if record["exception"]:
         subset["exception"] = {
             "type": record["exception"].type.__name__,
             "value": str(record["exception"].value),
         }
-    
+
     return json.dumps(subset)
 
 
@@ -65,7 +66,7 @@ def setup_logger(
     """Configure Loguru logger"""
     # Remove default handler
     logger.remove()
-    
+
     # Console output - use plain string format, NOT a function
     logger.add(
         sys.stdout,
@@ -80,7 +81,7 @@ def setup_logger(
         backtrace=True,
         diagnose=True,
     )
-    
+
     if log_to_file:
         # Application log file
         logger.add(
@@ -94,7 +95,7 @@ def setup_logger(
             backtrace=True,
             diagnose=True,
         )
-        
+
         # Error log file
         logger.add(
             LOGS_DIR / "errors.log",
@@ -107,7 +108,7 @@ def setup_logger(
             backtrace=True,
             diagnose=True,
         )
-        
+
         # JSON log file
         if json_logs:
             logger.add(
@@ -120,7 +121,7 @@ def setup_logger(
                 enqueue=True,
                 serialize=True,
             )
-    
+
     return logger
 
 
@@ -129,6 +130,7 @@ def get_logger(name: str = None):
     if name:
         return logger.bind(name=name)
     return logger
+
 
 # Export
 __all__ = ["logger", "setup_logger", "get_logger", "request_id_var"]

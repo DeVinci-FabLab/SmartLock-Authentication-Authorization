@@ -25,6 +25,7 @@ _token_cache: dict = {"access_token": None, "expires_at": 0.0}
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
+
 def _admin_base() -> str:
     return f"{settings.KEYCLOAK_URL}/admin/realms/{settings.KEYCLOAK_REALM}"
 
@@ -42,7 +43,9 @@ def _auth_headers(token: str) -> dict:
 
 def _handle_keycloak_error(e: httpx.HTTPStatusError, context: str) -> None:
     """Convertit les erreurs Keycloak en HTTPException FastAPI lisibles."""
-    logger.error(f"Keycloak error [{context}] : {e.response.status_code} — {e.response.text}")
+    logger.error(
+        f"Keycloak error [{context}] : {e.response.status_code} — {e.response.text}"
+    )
     if e.response.status_code == 401:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -66,6 +69,7 @@ def _handle_keycloak_error(e: httpx.HTTPStatusError, context: str) -> None:
 
 # ── Token service account ──────────────────────────────────────────────────────
 
+
 async def get_admin_token() -> str:
     """
     Retourne un token valide pour le service account smartlock-api.
@@ -79,11 +83,14 @@ async def get_admin_token() -> str:
     logger.debug("Renouvellement du token service account Keycloak...")
     try:
         async with httpx.AsyncClient() as client:
-            resp = await client.post(_token_url(), data={
-                "grant_type": "client_credentials",
-                "client_id": settings.KEYCLOAK_CLIENT_ID,
-                "client_secret": settings.KEYCLOAK_CLIENT_SECRET,
-            })
+            resp = await client.post(
+                _token_url(),
+                data={
+                    "grant_type": "client_credentials",
+                    "client_id": settings.KEYCLOAK_CLIENT_ID,
+                    "client_secret": settings.KEYCLOAK_CLIENT_SECRET,
+                },
+            )
             resp.raise_for_status()
     except httpx.HTTPStatusError as e:
         logger.error(f"Impossible d'obtenir le token service account : {e}")
@@ -107,6 +114,7 @@ async def get_admin_token() -> str:
 
 
 # ── Lecture ────────────────────────────────────────────────────────────────────
+
 
 async def find_user_by_card_id(card_id: str) -> dict | None:
     """
@@ -231,44 +239,6 @@ async def list_users(
         _handle_keycloak_error(e, "list_users")
 
     return resp.json()
-
-
-# ── Écriture ───────────────────────────────────────────────────────────────────
-
-async def create_user(
-    username: str,
-    email: str,
-    first_name: str,
-    last_name: str,
-) -> str:
-    """
-    Crée un utilisateur dans Keycloak.
-    Retourne son UUID (extrait du header Location de la réponse 201).
-    """
-    token = await get_admin_token()
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                f"{_admin_base()}/users",
-                json={
-                    "username": username,
-                    "email": email,
-                    "firstName": first_name,
-                    "lastName": last_name,
-                    "enabled": True,
-                },
-                headers=_auth_headers(token),
-            )
-            resp.raise_for_status()
-    except httpx.HTTPStatusError as e:
-        _handle_keycloak_error(e, "create_user")
-
-    # Keycloak répond 201 avec Location: .../users/{uuid}
-    location = resp.headers.get("Location", "")
-    user_id = location.rstrip("/").split("/")[-1]
-
-    logger.info(f"Utilisateur créé : {username} → id={user_id}")
-    return user_id
 
 
 async def set_user_card_id(user_id: str, card_id: str) -> None:

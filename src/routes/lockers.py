@@ -76,7 +76,9 @@ def get_locker_stock_endpoint(locker_id: int, db: Session = Depends(get_db)):
             logger.info(f"No stock found for locker with ID {locker_id}")
             return []
 
-        logger.info(f"Successfully retrieved {len(stock)} stock items for locker {locker_id}")
+        logger.info(
+            f"Successfully retrieved {len(stock)} stock items for locker {locker_id}"
+        )
         return stock
 
     except HTTPException:
@@ -120,7 +122,9 @@ def update_locker(
     logger.info(f"PUT /lockers/{locker_id} called")
 
     try:
-        locker = crud_lockers.update_locker(db, locker_id=locker_id, locker_update=locker_update)
+        locker = crud_lockers.update_locker(
+            db, locker_id=locker_id, locker_update=locker_update
+        )
         if locker is None:
             logger.warning(f"Locker with ID {locker_id} not found for update")
             raise HTTPException(status_code=404, detail="Locker not found")

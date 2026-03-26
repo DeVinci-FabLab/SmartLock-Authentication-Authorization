@@ -8,16 +8,15 @@ from src.schemas.access_log import AccessLogResponse
 from src.crud.crud_access_log import get_access_logs
 
 router = APIRouter(
-    prefix="/logs",
-    tags=["Audit Logs"],
-    dependencies=[Depends(require_admin)]
+    prefix="/logs", tags=["Audit Logs"], dependencies=[Depends(require_admin)]
 )
+
 
 @router.get("/", response_model=List[AccessLogResponse])
 def read_logs(
-    skip: int = 0, 
-    limit: int = 100, 
-    locker_id: Optional[int] = None, 
-    db: Session = Depends(get_db)
+    skip: int = 0,
+    limit: int = 100,
+    locker_id: Optional[int] = None,
+    db: Session = Depends(get_db),
 ):
     return get_access_logs(db, skip=skip, limit=limit, locker_id=locker_id)

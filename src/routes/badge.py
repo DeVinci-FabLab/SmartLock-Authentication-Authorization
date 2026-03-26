@@ -6,7 +6,11 @@ from sqlalchemy.exc import SQLAlchemyError
 from src.core.keycloak import require_nfc_scanner, require_admin
 from src.database.session import get_db
 from src.models.pending_card import PendingCard
-from src.schemas.pending_card import ScanCardRequest, ScanCardResponse, PendingCardResponse
+from src.schemas.pending_card import (
+    ScanCardRequest,
+    ScanCardResponse,
+    PendingCardResponse,
+)
 from src.utils.logger import logger
 
 router = APIRouter(prefix="/badge", tags=["Badge"])
@@ -34,12 +38,14 @@ async def scan_card(
 
     try:
         # Vérifier si la carte existe déjà
-        existing = db.query(PendingCard).filter(
-            PendingCard.card_id == body.card_id
-        ).first()
+        existing = (
+            db.query(PendingCard).filter(PendingCard.card_id == body.card_id).first()
+        )
 
         if existing:
-            logger.warning(f"card_id={body.card_id} déjà enregistré (status={existing.status})")
+            logger.warning(
+                f"card_id={body.card_id} déjà enregistré (status={existing.status})"
+            )
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Cette carte est déjà enregistrée (status: {existing.status})",
@@ -85,9 +91,12 @@ async def get_pending_cards(
     Protégé — réservé aux administrateurs Keycloak.
     """
     try:
-        cards = db.query(PendingCard).filter(
-            PendingCard.status == "pending"
-        ).order_by(PendingCard.scanned_at.desc()).all()
+        cards = (
+            db.query(PendingCard)
+            .filter(PendingCard.status == "pending")
+            .order_by(PendingCard.scanned_at.desc())
+            .all()
+        )
 
         logger.info(f"{len(cards)} carte(s) en attente")
         return cards
@@ -118,9 +127,7 @@ async def mark_card_assigned(
     il marque la carte comme assignée pour la retirer de la liste pending.
     """
     try:
-        card = db.query(PendingCard).filter(
-            PendingCard.card_id == card_id
-        ).first()
+        card = db.query(PendingCard).filter(PendingCard.card_id == card_id).first()
 
         if not card:
             raise HTTPException(

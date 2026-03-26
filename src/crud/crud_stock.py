@@ -5,6 +5,7 @@ from src.models.stock import Stock
 from src.schemas.stock import StockCreate, StockUpdate
 from src.utils.logger import logger
 
+
 def create_stock(db: Session, stock: StockCreate) -> Stock:
     """Create a new stock entry in the database."""
     logger.info(f"Creating stock entry for item_id: {stock.item_id}")
@@ -24,6 +25,7 @@ def create_stock(db: Session, stock: StockCreate) -> Stock:
         db.rollback()
         raise
 
+
 def get_stocks(db: Session, skip: int = 0, limit: int = 100) -> list[Stock]:
     """Retrieve a list of stock entries from the database."""
     logger.debug(f"Fetching stocks with skip={skip} and limit={limit}")
@@ -34,6 +36,7 @@ def get_stocks(db: Session, skip: int = 0, limit: int = 100) -> list[Stock]:
     except SQLAlchemyError as e:
         logger.error(f"Failed to fetch stocks: {e}")
         raise
+
 
 def get_stock(db: Session, stock_id: int) -> Stock | None:
     """Retrieve a single stock entry by its ID."""
@@ -46,6 +49,7 @@ def get_stock(db: Session, stock_id: int) -> Stock | None:
         logger.error(f"Failed to fetch stock with ID {stock_id}: {e}")
         raise
 
+
 def update_stock(db: Session, stock_id: int, stock_update: StockUpdate) -> Stock | None:
     """Update an existing stock entry in the database."""
     logger.info(f"Updating stock with ID: {stock_id}")
@@ -54,11 +58,11 @@ def update_stock(db: Session, stock_id: int, stock_update: StockUpdate) -> Stock
         if not db_stock:
             logger.warning(f"Stock with ID {stock_id} not found. Cannot update.")
             return None
-        
+
         update_data = stock_update.model_dump(exclude_unset=True)
         for key, value in update_data.items():
             setattr(db_stock, key, value)
-            
+
         db.commit()
         db.refresh(db_stock)
         logger.success(f"Stock with ID {stock_id} updated successfully")
@@ -72,6 +76,7 @@ def update_stock(db: Session, stock_id: int, stock_update: StockUpdate) -> Stock
         db.rollback()
         raise
 
+
 def delete_stock(db: Session, stock_id: int) -> Stock | None:
     """Delete a stock entry from the database."""
     logger.warning(f"Attempting to delete stock with ID: {stock_id}")
@@ -80,7 +85,7 @@ def delete_stock(db: Session, stock_id: int) -> Stock | None:
         if not db_stock:
             logger.warning(f"Stock with ID {stock_id} not found. Cannot delete.")
             return None
-        
+
         db.delete(db_stock)
         db.commit()
         logger.success(f"Stock with ID {stock_id} deleted successfully")

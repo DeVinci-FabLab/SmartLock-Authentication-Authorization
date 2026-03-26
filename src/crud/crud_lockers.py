@@ -4,12 +4,13 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from src.models.lockers import Lockers
 from src.models.stock import Stock
-from src.schemas.lockers import LockerCreate, LockerUpdate 
+from src.schemas.lockers import LockerCreate, LockerUpdate
 from src.utils.logger import logger
+
 
 def create_locker(db: Session, locker: LockerCreate) -> Lockers:
     """Create a new locker in the database."""
-    logger.info(f"Creating locker with name/code: {locker.locker_type}") 
+    logger.info(f"Creating locker with name/code: {locker.locker_type}")
     try:
         db_locker = Lockers(**locker.model_dump())
         db.add(db_locker)
@@ -26,6 +27,7 @@ def create_locker(db: Session, locker: LockerCreate) -> Lockers:
         db.rollback()
         raise
 
+
 def get_lockers(db: Session, skip: int = 0, limit: int = 100) -> list[Lockers]:
     """Retrieve a list of lockers from the database."""
     logger.debug(f"Fetching lockers with skip={skip} and limit={limit}")
@@ -37,6 +39,7 @@ def get_lockers(db: Session, skip: int = 0, limit: int = 100) -> list[Lockers]:
         logger.error(f"Failed to fetch lockers: {e}")
         raise
 
+
 def get_locker(db: Session, locker_id: int) -> Lockers | None:
     """Retrieve a single locker by its ID."""
     logger.debug(f"Fetching locker with ID: {locker_id}")
@@ -47,39 +50,43 @@ def get_locker(db: Session, locker_id: int) -> Lockers | None:
     except SQLAlchemyError as e:
         logger.error(f"Failed to fetch locker with ID {locker_id}: {e}")
         raise
-    
+
+
 def get_locker_stock(db: Session, locker_id: int) -> List[Stock]:
     """
     Retrieve all stock items for a specific locker.
-    
+
     Args:
         db: Database session
         locker_id: ID of the locker
-        
+
     Returns:
         List of Stock objects for the locker
-        
+
     Raises:
         SQLAlchemyError: If database query fails
     """
     logger.debug(f"Fetching stock for locker with ID: {locker_id}")
-    
+
     try:
         locker = db.query(Lockers).filter(Lockers.id == locker_id).first()
-        
+
         if not locker:
             logger.warning(f"Locker with ID {locker_id} not found")
             return []
-        
+
         stock = locker.stock  # Access via relationship
         logger.info(f"Retrieved {len(stock)} stock items for locker {locker_id}")
         return stock
-        
+
     except SQLAlchemyError as e:
         logger.error(f"Failed to fetch stock for locker {locker_id}: {e}")
         raise
 
-def update_locker(db: Session, locker_id: int, locker_update: LockerUpdate) -> Lockers | None:
+
+def update_locker(
+    db: Session, locker_id: int, locker_update: LockerUpdate
+) -> Lockers | None:
     """Update an existing locker in the database."""
     logger.info(f"Updating locker with ID: {locker_id}")
     try:
@@ -87,11 +94,11 @@ def update_locker(db: Session, locker_id: int, locker_update: LockerUpdate) -> L
         if not db_locker:
             logger.warning(f"Locker with ID {locker_id} not found. Cannot update.")
             return None
-        
+
         update_data = locker_update.model_dump(exclude_unset=True)
         for key, value in update_data.items():
             setattr(db_locker, key, value)
-            
+
         db.commit()
         db.refresh(db_locker)
         logger.success(f"Locker with ID {locker_id} updated successfully")
@@ -105,6 +112,7 @@ def update_locker(db: Session, locker_id: int, locker_update: LockerUpdate) -> L
         db.rollback()
         raise
 
+
 def delete_locker(db: Session, locker_id: int) -> Lockers | None:
     """Delete a locker from the database."""
     logger.warning(f"Attempting to delete locker with ID: {locker_id}")
@@ -113,7 +121,7 @@ def delete_locker(db: Session, locker_id: int) -> Lockers | None:
         if not db_locker:
             logger.warning(f"Locker with ID {locker_id} not found. Cannot delete.")
             return None
-        
+
         db.delete(db_locker)
         db.commit()
         logger.success(f"Locker with ID {locker_id} deleted successfully")

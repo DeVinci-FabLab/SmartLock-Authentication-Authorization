@@ -13,7 +13,9 @@ class PendingCardResponse(BaseModel):
 
 
 class ScanCardRequest(BaseModel):
-    card_id: str = Field(..., min_length=1, max_length=64, description="ID de la carte NFC")
+    card_id: str = Field(
+        ..., min_length=1, max_length=64, description="ID de la carte NFC"
+    )
 
 
 class ScanCardResponse(BaseModel):

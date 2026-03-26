@@ -88,6 +88,7 @@ async def require_nfc_scanner(
         )
     return payload
 
+
 # -------------------------------------------------------------------
 # Dependency : réservé au client smartlock-lockers (Raspberry Pis)
 # -------------------------------------------------------------------
@@ -105,6 +106,7 @@ async def require_locker_client(
             detail="Accès réservé aux terminaux physiques (casiers)",
         )
     return payload
+
 
 # -------------------------------------------------------------------
 # Dependency : réservé aux admins Keycloak
