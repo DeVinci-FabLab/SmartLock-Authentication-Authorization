@@ -6,4 +6,4 @@ uv run alembic upgrade head
 
 # Démarrer l'API
 echo "Starting the API..."
-uv run src/main.py --port 80 --host 0.0.0.0
+exec uv run uvicorn src.main:app --host 0.0.0.0 --port 8000

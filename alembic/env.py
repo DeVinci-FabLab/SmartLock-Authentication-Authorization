@@ -7,7 +7,15 @@ from sqlalchemy import pool
 from alembic import context
 
 from src.database.base import Base
-from src.models import access_log, categories, items, lockers, stock, locker_permission, pending_card
+from src.models import (
+    access_log,
+    categories,
+    items,
+    lockers,
+    stock,
+    locker_permission,
+    pending_card,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -16,7 +24,7 @@ config = context.config
 database_url = os.getenv("DATABASE_URL")
 if database_url:
     config.set_main_option("sqlalchemy.url", database_url)
-    
+
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
@@ -72,9 +80,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()
