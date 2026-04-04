@@ -1,5 +1,4 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-import os
 
 
 class Settings(BaseSettings):
@@ -17,11 +16,15 @@ class Settings(BaseSettings):
     KEYCLOAK_REALM: str = "master"
 
     KEYCLOAK_CLIENT_ID: str = "smartlock-api"
-    KEYCLOAK_CLIENT_SECRET: str
-    LOCKER_CLIENT_SECRET: str
+    KEYCLOAK_CLIENT_SECRET: str = ""
+    LOCKER_CLIENT_SECRET: str = ""
+    NFC_CLIENT_SECRET: str = ""
 
     model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", case_sensitive=False
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
     )
 
 

@@ -1,7 +1,7 @@
-from datetime import datetime
-from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, DateTime
-from src.database.base import Base
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import relationship
+
+from src.database.base import Base
 
 
 class AccessLog(Base):
@@ -27,7 +27,7 @@ class AccessLog(Base):
     can_open = Column(Boolean, nullable=True)
     can_view = Column(Boolean, nullable=True)
 
-    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
+    timestamp = Column(DateTime(timezone=True), default=func.now(), nullable=False)
 
     # Relation (optionnelle, suppose que le modèle Lockers existe)
     locker = relationship("Lockers", back_populates="access_logs")

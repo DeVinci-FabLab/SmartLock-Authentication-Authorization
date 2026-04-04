@@ -11,7 +11,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
-# Imports UNIQUEMENT des fonctions de LECTURE
 from src.core.keycloak_admin import (
     get_admin_token,
     list_users,
@@ -19,7 +18,7 @@ from src.core.keycloak_admin import (
     get_user_groups,
     get_user_effective_roles,
     list_groups,
-    find_user_by_card_id
+    find_user_by_card_id,
 )
 
 async def run_tests():

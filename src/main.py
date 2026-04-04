@@ -1,33 +1,29 @@
 import logging
 import sys
-
-from src.routes import (
-    categories,
-    items,
-    lockers,
-    stock,
-    locker_permission,
-    badge,
-    auth,
-    users,
-    access_log,
-)
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware  # ADD THIS
-
-from src.database.session import engine
-from src.database.base import Base
-from src.utils.middleware_logger import LoggingMiddleware
-from src.utils.logger import setup_logger, logger
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 
-from contextlib import asynccontextmanager
+from src.routes import (
+    access_log,
+    auth,
+    badge,
+    categories,
+    items,
+    locker_permission,
+    lockers,
+    stock,
+    users,
+)
+from src.utils.logger import logger, setup_logger
+from src.utils.middleware_logger import LoggingMiddleware
 
 # Initialize limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -36,14 +32,8 @@ limiter = Limiter(key_func=get_remote_address)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("🚀 Starting application...")
-
-    try:
-        Base.metadata.create_all(bind=engine)
-        logger.info("✅ Database tables created successfully.")
-    except Exception as e:
-        logger.error(f"❌ Failed to create database tables: {e}")
-        raise
-
+    # Les tables sont créées par Alembic (alembic upgrade head)
+    # Ne pas utiliser Base.metadata.create_all() pour éviter les conflits
     logger.success("✅ Application startup complete.")
     yield
 
@@ -63,7 +53,6 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# ADD SLOWAPI MIDDLEWARE - This is crucial!
 app.add_middleware(SlowAPIMiddleware)
 
 app.add_middleware(

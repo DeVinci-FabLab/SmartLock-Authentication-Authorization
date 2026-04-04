@@ -1,6 +1,16 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, UniqueConstraint
-from src.database.base import Base
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import relationship
+
+from src.database.base import Base
 
 
 class Locker_Permission(Base):
@@ -27,7 +37,7 @@ class Locker_Permission(Base):
 
     # --- Métadonnées ---
     valid_until = Column(String, nullable=True)  # Format ISO ou null (sans expiration)
-    created_at = Column(String)  # Format ISO
+    created_at = Column(DateTime(timezone=True), default=func.now())
 
     locker = relationship("Lockers", back_populates="permissions")
 

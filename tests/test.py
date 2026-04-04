@@ -123,10 +123,7 @@ resp = requests.post(
     f"{API_URL}/lockers/",
     headers=headers_admin,
     json={
-        "name": f"Casier-{UNIQUE_ID}",
         "locker_type": "standard",
-        "status": "available",
-        "is_connected": True,
     },
 )
 assert resp.status_code in [200, 201], f"Erreur: {resp.text}"
@@ -136,10 +133,10 @@ print(f"  ✅ POST /lockers/ (ID: {TEST_DATA['locker_id']})")
 resp = requests.put(
     f"{API_URL}/lockers/{TEST_DATA['locker_id']}",
     headers=headers_admin,
-    json={"status": "maintenance"},
+    json={"is_active": False},
 )
 assert resp.status_code == 200
-print("  ✅ PUT /lockers/{id} (Modification statut)")
+print("  ✅ PUT /lockers/{id} (Désactivation du casier)")
 
 # =================================================================
 # 6. STOCK & PERMISSIONS

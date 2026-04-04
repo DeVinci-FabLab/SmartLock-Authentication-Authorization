@@ -1,11 +1,12 @@
 from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from src.core.keycloak import require_admin, validate_jwt
-from src.database.session import get_db
 from src.crud import crud_items
-from src.schemas.items import ItemCreate, ItemUpdate, ItemResponse
+from src.database.session import get_db
+from src.schemas.items import ItemCreate, ItemResponse, ItemUpdate
 from src.utils.logger import logger
 
 router = APIRouter(prefix="/items", tags=["Items"])

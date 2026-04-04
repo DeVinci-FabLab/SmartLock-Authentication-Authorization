@@ -1,15 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
 from typing import List
 
-from src.database.session import get_db
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
 from src.core.keycloak import require_admin
+from src.crud import crud_locker_permission as crud
+from src.database.session import get_db
 from src.schemas.locker_permission import (
     LockerPermissionCreate,
-    LockerPermissionUpdate,
     LockerPermissionResponse,
+    LockerPermissionUpdate,
 )
-from src.crud import crud_locker_permission as crud
 
 # On applique require_admin à l'ensemble du routeur !
 router = APIRouter(

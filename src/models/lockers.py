@@ -1,6 +1,7 @@
-from sqlalchemy import Column, DateTime, Integer, String, Boolean, func
-from src.database.base import Base
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, func
 from sqlalchemy.orm import relationship
+
+from src.database.base import Base
 
 
 class Lockers(Base):

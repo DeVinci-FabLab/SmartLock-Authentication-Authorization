@@ -1,8 +1,9 @@
 import json
 import sys
-from pathlib import Path
-from loguru import logger
 from contextvars import ContextVar
+from pathlib import Path
+
+from loguru import logger
 
 # Create logs directory
 LOGS_DIR = Path("logs")

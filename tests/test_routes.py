@@ -96,7 +96,7 @@ def run_tests():
     print(f"     ✅ Résultat : {resp.status_code} - Outil créé (ID: {item_id})")
 
     print("  🟢 Création d'un casier...")
-    resp = client.post("/lockers/", json={"name": "Armoire 3D", "locker_type": "standard", "status": "available", "is_connected": True})
+    resp = client.post("/lockers/", json={"locker_type": "standard"})
     locker_id = resp.json().get("id")
     print(f"     ✅ Résultat : {resp.status_code} - Casier créé (ID: {locker_id})")
 

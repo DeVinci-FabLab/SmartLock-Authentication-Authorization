@@ -7,9 +7,9 @@ Keycloak integration
 """
 
 import httpx
-from jose import jwt, JWTError
-from fastapi import HTTPException, Security, status, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, HTTPException, Security, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
 
 from src.core.config import settings
 from src.utils.logger import logger

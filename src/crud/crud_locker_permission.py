@@ -1,6 +1,7 @@
-from typing import List, Optional
+from typing import List
+
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 
 from src.models.locker_permission import Locker_Permission
 from src.schemas.locker_permission import LockerPermissionCreate, LockerPermissionUpdate
@@ -16,7 +17,8 @@ def create_locker_permission(
         else permission.role_name
     )
     logger.info(
-        f"Creating permission for {permission.subject_type} '{target}' on locker ID {permission.locker_id}"
+        f"Creating permission for {permission.subject_type} "
+        f"'{target}' on locker ID {permission.locker_id}"
     )
     try:
         db_permission = Locker_Permission(**permission.model_dump())
@@ -27,8 +29,8 @@ def create_locker_permission(
         logger.success(f"Permission created successfully with ID: {db_permission.id}")
         return db_permission
 
-    except IntegrityError as e:
-        logger.warning(f"Permission already exists for this target/locker combination.")
+    except IntegrityError:
+        logger.warning("Permission already exists for this target/locker combination.")
         db.rollback()
         raise ValueError("A permission for this target and locker already exists.")
 
@@ -39,45 +41,6 @@ def create_locker_permission(
     except Exception as e:
         logger.error(f"Unexpected error while creating locker permission: {e}")
         db.rollback()
-        raise
-
-
-def get_locker_permission(db: Session, permission_id: int) -> Locker_Permission | None:
-    """Retrieve a single locker permission by its ID."""
-    logger.debug(f"Fetching locker permission with ID: {permission_id}")
-    try:
-        permission = (
-            db.query(Locker_Permission)
-            .filter(Locker_Permission.id == permission_id)
-            .first()
-        )
-        if permission:
-            logger.info(
-                f"Locker permission with ID {permission_id} fetched successfully"
-            )
-        else:
-            logger.warning(f"Locker permission with ID {permission_id} not found")
-        return permission
-    except SQLAlchemyError as e:
-        logger.error(f"Failed to fetch locker permission with ID {permission_id}: {e}")
-        raise
-
-
-def get_locker_permissions(
-    db: Session, skip: int = 0, limit: int = 100
-) -> List[Locker_Permission]:
-    """Retrieve a list of lockers permissions from the database."""
-    logger.debug(f"Fetching locker permissions with skip={skip} and limit={limit}")
-    try:
-        lockers_permissions = (
-            db.query(Locker_Permission).offset(skip).limit(limit).all()
-        )
-        logger.info(
-            f"Fetched {len(lockers_permissions)} locker permissions successfully"
-        )
-        return lockers_permissions
-    except SQLAlchemyError as e:
-        logger.error(f"Failed to fetch locker permissions: {e}")
         raise
 
 
@@ -96,43 +59,6 @@ def get_locker_permissions_by_locker(
             f"Fetched {len(permissions)} permissions for locker ID '{locker_id}'"
         )
         return permissions
-    except SQLAlchemyError as e:
-        logger.error(f"Failed to fetch permissions for locker ID '{locker_id}': {e}")
-        raise
-
-
-def get_permission_by_target_and_locker(
-    db: Session,
-    locker_id: int,
-    subject_type: str,
-    role_name: Optional[str] = None,
-    user_id: Optional[str] = None,
-) -> Locker_Permission | None:
-    """Retrieve a specific permission by target (role or user) and locker ID."""
-    target = user_id if subject_type == "user" else role_name
-    logger.debug(
-        f"Fetching permission for {subject_type} '{target}' on locker ID '{locker_id}'"
-    )
-    try:
-        query = db.query(Locker_Permission).filter(
-            Locker_Permission.locker_id == locker_id,
-            Locker_Permission.subject_type == subject_type,
-        )
-        if subject_type == "role":
-            query = query.filter(Locker_Permission.role_name == role_name)
-        else:
-            query = query.filter(Locker_Permission.user_id == user_id)
-
-        permission = query.first()
-        if permission:
-            logger.info(
-                f"Found permission for {subject_type} '{target}' on locker ID '{locker_id}'"
-            )
-        else:
-            logger.warning(
-                f"No permission found for {subject_type} '{target}' on locker ID '{locker_id}'"
-            )
-        return permission
     except SQLAlchemyError as e:
         logger.error(f"Failed to fetch permissions for locker ID '{locker_id}': {e}")
         raise
@@ -170,9 +96,7 @@ def update_locker_permission(
         db.rollback()
         raise
     except Exception as e:
-        logger.error(
-            f"Unexpected error while updating locker permission with ID {permission_id}: {e}"
-        )
+        logger.error(f"Unexpected error updating permission {permission_id}: {e}")
         db.rollback()
         raise
 
@@ -205,8 +129,6 @@ def delete_locker_permission(
         db.rollback()
         raise
     except Exception as e:
-        logger.error(
-            f"Unexpected error while deleting locker permission with ID {permission_id}: {e}"
-        )
+        logger.error(f"Unexpected error deleting permission {permission_id}: {e}")
         db.rollback()
         raise

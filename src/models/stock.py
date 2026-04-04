@@ -1,14 +1,14 @@
 from sqlalchemy import (
     Column,
     DateTime,
+    ForeignKey,
     Integer,
     String,
-    ForeignKey,
-    UniqueConstraint,
     func,
 )
-from src.database.base import Base
 from sqlalchemy.orm import relationship
+
+from src.database.base import Base
 
 
 class Stock(Base):

@@ -1,14 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from datetime import datetime
 
-from src.database.session import get_db
 from src.core.keycloak import require_locker_client
 from src.core.keycloak_admin import find_user_by_card_id, get_user_effective_roles
+from src.crud.crud_access_log import create_access_log
+from src.database.session import get_db
 from src.models.locker_permission import Locker_Permission
 from src.schemas.access_log import AccessLogCreate
-from src.crud.crud_access_log import create_access_log
 from src.utils.logger import logger
 
 router = APIRouter(
@@ -33,7 +34,7 @@ async def check_locker_access(
     locker_id: int,
     request: LockerCheckRequest,
     db: Session = Depends(get_db),
-    # Cette dépendance garantit que seul le Raspberry Pi (client smartlock-lockers) peut appeler cette route
+    # Réservé au Raspberry Pi (client smartlock-lockers)
     _: dict = Depends(require_locker_client),
 ):
     """
@@ -86,9 +87,9 @@ async def check_locker_access(
     }
 
     has_permission_row = False
-    now_iso = datetime.utcnow().isoformat()
+    now_iso = datetime.now(timezone.utc).isoformat()
 
-    # 4. Parcourir les permissions pour trouver celles qui s'appliquent (rôle correspondant)
+    # 4. Parcourir les permissions applicables
     for perm in locker_permissions:
         # Vérifier l'expiration
         if perm.valid_until and perm.valid_until < now_iso:
@@ -97,15 +98,14 @@ async def check_locker_access(
         # Permission basée sur un rôle que l'utilisateur possède
         if perm.subject_type == "role" and perm.role_name in roles:
             has_permission_row = True
-            # Fusion avec un OU logique (si un de ses rôles donne la permission, c'est bon)
+            # Fusion OR (un rôle suffit)
             granted_permissions["can_view"] |= perm.can_view
             granted_permissions["can_open"] |= perm.can_open
             granted_permissions["can_edit"] |= perm.can_edit
             granted_permissions["can_take"] |= perm.can_take
             granted_permissions["can_manage"] |= perm.can_manage
 
-    # 5. Surcharge par utilisateur : si une permission cible spécifiquement cet utilisateur,
-    # elle écrase et remplace TOUTES les permissions basées sur les rôles.
+    # 5. Surcharge user-specific (écrase les permissions rôle)
     user_specific_perm = next(
         (
             p

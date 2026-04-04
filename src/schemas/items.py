@@ -1,13 +1,7 @@
-from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
-from typing import Optional, List
-from .categories import CategoryResponse
-from .stock import StockResponse
-from typing import TYPE_CHECKING
+from typing import Optional
 
-if TYPE_CHECKING:
-    from .categories import CategoryResponse
-    from .stock import StockResponse
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ItemBase(BaseModel):
@@ -40,10 +34,3 @@ class ItemResponse(ItemBase):
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
-
-
-class ItemWithDetails(ItemResponse):
-    """Item with category and stock information"""
-
-    category: Optional["CategoryResponse"] = None
-    stock: List["StockResponse"] = []
