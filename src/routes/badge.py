@@ -1,15 +1,16 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
 
-from src.core.keycloak import require_nfc_scanner, require_admin
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
+
+from src.core.keycloak import require_admin, require_nfc_scanner
 from src.database.session import get_db
 from src.models.pending_card import PendingCard
 from src.schemas.pending_card import (
+    PendingCardResponse,
     ScanCardRequest,
     ScanCardResponse,
-    PendingCardResponse,
 )
 from src.utils.logger import logger
 

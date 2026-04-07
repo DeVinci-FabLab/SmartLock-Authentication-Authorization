@@ -1,6 +1,7 @@
 from typing import List, Optional
-from sqlalchemy.orm import Session
+
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
 from src.models.access_log import AccessLog
 from src.schemas.access_log import AccessLogCreate
@@ -29,7 +30,7 @@ def create_access_log(db: Session, log: AccessLogCreate) -> AccessLog:
 def get_access_logs(
     db: Session, skip: int = 0, limit: int = 100, locker_id: Optional[int] = None
 ) -> List[AccessLog]:
-    """Retrieve access logs, optionally filtered by locker_id, ordered by most recent."""
+    """Retrieve access logs, optionally filtered by locker_id."""
     logger.debug(
         f"Fetching access logs (locker_id={locker_id}, skip={skip}, limit={limit})"
     )

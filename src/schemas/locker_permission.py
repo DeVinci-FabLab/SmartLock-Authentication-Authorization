@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from datetime import datetime
 from typing import Optional
-from .lockers import LockerResponse
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class LockerPermissionBase(BaseModel):
@@ -63,12 +64,6 @@ class LockerPermissionResponse(LockerPermissionBase):
     """Schema for locker permission response"""
 
     id: int
-    created_at: Optional[str] = None
+    created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
-
-
-class LockerPermissionWithDetails(LockerPermissionResponse):
-    """Locker permission with locker information"""
-
-    locker: Optional[LockerResponse] = None

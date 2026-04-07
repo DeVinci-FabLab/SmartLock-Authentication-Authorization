@@ -1,5 +1,5 @@
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
 from src.models.categories import Categories
 from src.schemas.categories import CategoryCreate, CategoryUpdate
@@ -74,7 +74,7 @@ def update_category(
         update_data = category_update.model_dump(exclude_unset=True)
         logger.debug(f"Update data for category ID {category_id}: {update_data}")
 
-        for key, value in category_update.model_dump(exclude_unset=True).items():
+        for key, value in update_data.items():
             setattr(db_category, key, value)
 
         db.commit()

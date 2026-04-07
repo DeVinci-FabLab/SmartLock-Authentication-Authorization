@@ -1,11 +1,7 @@
-from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
-from typing import Optional, List
-from .stock import StockResponse
-from typing import TYPE_CHECKING
+from typing import Optional
 
-if TYPE_CHECKING:
-    from .stock import StockResponse
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class LockerBase(BaseModel):
@@ -38,9 +34,3 @@ class LockerResponse(LockerBase):
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
-
-
-class LockerWithStock(LockerResponse):
-    """Locker with its stock information"""
-
-    stock: List["StockResponse"] = []

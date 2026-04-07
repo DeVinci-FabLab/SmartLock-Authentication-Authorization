@@ -1,14 +1,15 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from datetime import datetime
 
-from src.database.session import get_db
 from src.core.keycloak import require_locker_client
 from src.core.keycloak_admin import find_user_by_card_id, get_user_effective_roles
+from src.crud.crud_access_log import create_access_log
+from src.database.session import get_db
 from src.models.locker_permission import Locker_Permission
 from src.schemas.access_log import AccessLogCreate
-from src.crud.crud_access_log import create_access_log
 from src.utils.logger import logger
 
 router = APIRouter(
@@ -28,28 +29,60 @@ class LockerCheckResponse(BaseModel):
     permissions: dict | None = None
 
 
-@router.post("/locker/{locker_id}/check", response_model=LockerCheckResponse)
+def _is_expired(valid_until: str | None, now: datetime) -> bool:
+    """Check if a permission is expired by parsing the ISO date string."""
+    if not valid_until:
+        return False
+    try:
+        expiry = datetime.fromisoformat(valid_until)
+        if expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=timezone.utc)
+        return expiry < now
+    except (ValueError, TypeError):
+        logger.warning(f"Format valid_until invalide: {valid_until}")
+        return False
+
+
+@router.post(
+    "/locker/{locker_id}/check",
+    response_model=LockerCheckResponse,
+)
 async def check_locker_access(
     locker_id: int,
     request: LockerCheckRequest,
     db: Session = Depends(get_db),
-    # Cette dépendance garantit que seul le Raspberry Pi (client smartlock-lockers) peut appeler cette route
     _: dict = Depends(require_locker_client),
 ):
     """
-    Endpoint appelé par le Raspberry Pi lors du scan d'un badge NFC.
-    Vérifie l'identité du badge via Keycloak, calcule les permissions,
-    enregistre l'historique d'accès et renvoie la décision d'ouverture.
+    Endpoint appele par le Raspberry Pi lors du scan d'un badge NFC.
+    Verifie l'identite du badge via Keycloak, calcule les permissions,
+    enregistre l'historique d'acces et renvoie la decision d'ouverture.
     """
     card_id = request.card_id
-    logger.info(f"Demande d'accès au casier {locker_id} avec la carte {card_id}")
+    logger.info(
+        f"Demande d'acces au casier {locker_id} avec la carte {card_id}"
+    )
 
     # 1. Identifier l'utilisateur dans Keycloak via son card_id
-    user = await find_user_by_card_id(card_id)
+    try:
+        user = await find_user_by_card_id(card_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur Keycloak (find_user_by_card_id): {e}")
+        log_entry = AccessLogCreate(
+            locker_id=locker_id,
+            card_id=card_id,
+            result="denied",
+            reason="keycloak_error",
+        )
+        create_access_log(db, log_entry)
+        return LockerCheckResponse(
+            allowed=False, reason="keycloak_error"
+        )
 
     if not user:
-        logger.warning(f"Carte {card_id} non enregistrée dans Keycloak.")
-        # Historiser le refus
+        logger.warning(f"Carte {card_id} non enregistree dans Keycloak.")
         log_entry = AccessLogCreate(
             locker_id=locker_id,
             card_id=card_id,
@@ -57,56 +90,80 @@ async def check_locker_access(
             reason="card_not_registered",
         )
         create_access_log(db, log_entry)
-        return LockerCheckResponse(allowed=False, reason="card_not_registered")
+        return LockerCheckResponse(
+            allowed=False, reason="card_not_registered"
+        )
 
     user_id = user["id"]
     display_name = (
         f"{user.get('firstName', '')} {user.get('lastName', '')}".strip()
         or user.get("username", "Utilisateur inconnu")
     )
-    logger.debug(f"Utilisateur identifié : {display_name} (ID: {user_id})")
-
-    # 2. Récupérer les rôles Keycloak de l'utilisateur
-    roles = await get_user_effective_roles(user_id)
-
-    # 3. Récupérer toutes les permissions pour ce casier depuis la base de données
-    locker_permissions = (
-        db.query(Locker_Permission)
-        .filter(Locker_Permission.locker_id == locker_id)
-        .all()
+    logger.debug(
+        f"Utilisateur identifie : {display_name} (ID: {user_id})"
     )
 
-    # Variables pour consolider les permissions accordées
-    granted_permissions = {
+    # 2. Recuperer les roles Keycloak de l'utilisateur
+    try:
+        roles = await get_user_effective_roles(user_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur Keycloak (get_user_effective_roles): {e}")
+        log_entry = AccessLogCreate(
+            locker_id=locker_id,
+            card_id=card_id,
+            user_id=user_id,
+            username=display_name,
+            result="denied",
+            reason="keycloak_error",
+        )
+        create_access_log(db, log_entry)
+        return LockerCheckResponse(
+            allowed=False,
+            display_name=display_name,
+            reason="keycloak_error",
+        )
+
+    # 3. Recuperer les permissions pour ce casier
+    try:
+        locker_permissions = (
+            db.query(Locker_Permission)
+            .filter(Locker_Permission.locker_id == locker_id)
+            .all()
+        )
+    except Exception as e:
+        logger.error(f"Erreur DB (locker_permissions): {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erreur base de donnees",
+        )
+
+    # 4. Consolider les permissions
+    granted = {
         "can_view": False,
         "can_open": False,
         "can_edit": False,
         "can_take": False,
         "can_manage": False,
     }
-
     has_permission_row = False
-    now_iso = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc)
 
-    # 4. Parcourir les permissions pour trouver celles qui s'appliquent (rôle correspondant)
     for perm in locker_permissions:
-        # Vérifier l'expiration
-        if perm.valid_until and perm.valid_until < now_iso:
+        if _is_expired(perm.valid_until, now):
             continue
 
-        # Permission basée sur un rôle que l'utilisateur possède
         if perm.subject_type == "role" and perm.role_name in roles:
             has_permission_row = True
-            # Fusion avec un OU logique (si un de ses rôles donne la permission, c'est bon)
-            granted_permissions["can_view"] |= perm.can_view
-            granted_permissions["can_open"] |= perm.can_open
-            granted_permissions["can_edit"] |= perm.can_edit
-            granted_permissions["can_take"] |= perm.can_take
-            granted_permissions["can_manage"] |= perm.can_manage
+            granted["can_view"] |= perm.can_view
+            granted["can_open"] |= perm.can_open
+            granted["can_edit"] |= perm.can_edit
+            granted["can_take"] |= perm.can_take
+            granted["can_manage"] |= perm.can_manage
 
-    # 5. Surcharge par utilisateur : si une permission cible spécifiquement cet utilisateur,
-    # elle écrase et remplace TOUTES les permissions basées sur les rôles.
-    user_specific_perm = next(
+    # 5. Surcharge user-specific (ecrase les permissions role)
+    user_perm = next(
         (
             p
             for p in locker_permissions
@@ -115,25 +172,21 @@ async def check_locker_access(
         None,
     )
 
-    if user_specific_perm:
-        if user_specific_perm.valid_until and user_specific_perm.valid_until < now_iso:
-            # La permission spécifique est expirée, on garde les permissions des rôles
-            pass
-        else:
-            has_permission_row = True
-            granted_permissions = {
-                "can_view": user_specific_perm.can_view,
-                "can_open": user_specific_perm.can_open,
-                "can_edit": user_specific_perm.can_edit,
-                "can_take": user_specific_perm.can_take,
-                "can_manage": user_specific_perm.can_manage,
-            }
+    if user_perm and not _is_expired(user_perm.valid_until, now):
+        has_permission_row = True
+        granted = {
+            "can_view": user_perm.can_view,
+            "can_open": user_perm.can_open,
+            "can_edit": user_perm.can_edit,
+            "can_take": user_perm.can_take,
+            "can_manage": user_perm.can_manage,
+        }
 
-    # 6. Décision finale
-    allowed = has_permission_row and granted_permissions["can_open"]
+    # 6. Decision finale
+    allowed = has_permission_row and granted["can_open"]
     reason = None if allowed else "no_permission"
 
-    # 7. Historiser la décision
+    # 7. Historiser la decision
     log_entry = AccessLogCreate(
         locker_id=locker_id,
         card_id=card_id,
@@ -141,21 +194,28 @@ async def check_locker_access(
         username=display_name,
         result="allowed" if allowed else "denied",
         reason=reason,
-        can_open=granted_permissions.get("can_open"),
-        can_view=granted_permissions.get("can_view"),
+        can_open=granted.get("can_open"),
+        can_view=granted.get("can_view"),
     )
     create_access_log(db, log_entry)
 
-    # 8. Répondre au Raspberry Pi
+    # 8. Repondre au Raspberry Pi
     if allowed:
-        logger.info(f"Accès AUTORISÉ au casier {locker_id} pour {display_name}")
+        logger.info(
+            f"Acces AUTORISE au casier {locker_id} pour {display_name}"
+        )
         return LockerCheckResponse(
-            allowed=True, display_name=display_name, permissions=granted_permissions
+            allowed=True,
+            display_name=display_name,
+            permissions=granted,
         )
     else:
         logger.info(
-            f"Accès REFUSÉ au casier {locker_id} pour {display_name} (Raison: {reason})"
+            f"Acces REFUSE au casier {locker_id} "
+            f"pour {display_name} (Raison: {reason})"
         )
         return LockerCheckResponse(
-            allowed=False, display_name=display_name, reason=reason
+            allowed=False,
+            display_name=display_name,
+            reason=reason,
         )

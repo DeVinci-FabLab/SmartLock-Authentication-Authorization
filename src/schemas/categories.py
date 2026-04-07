@@ -1,9 +1,7 @@
-from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
-from typing import Optional, List, TYPE_CHECKING
+from typing import Optional
 
-if TYPE_CHECKING:
-    from .items import ItemResponse
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CategoryBase(BaseModel):
@@ -32,9 +30,3 @@ class CategoryResponse(CategoryBase):
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
-
-
-class CategoryWithItems(CategoryResponse):
-    """Category with its items included"""
-
-    items: List["ItemResponse"] = []

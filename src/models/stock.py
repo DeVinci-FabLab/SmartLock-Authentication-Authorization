@@ -1,14 +1,15 @@
 from sqlalchemy import (
     Column,
     DateTime,
+    ForeignKey,
     Integer,
     String,
-    ForeignKey,
     UniqueConstraint,
     func,
 )
-from src.database.base import Base
 from sqlalchemy.orm import relationship
+
+from src.database.base import Base
 
 
 class Stock(Base):
@@ -26,3 +27,9 @@ class Stock(Base):
 
     item = relationship("Items", back_populates="stock")
     locker = relationship("Lockers", back_populates="stock")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "item_id", "locker_id", name="unique_stock_item_locker"
+        ),
+    )

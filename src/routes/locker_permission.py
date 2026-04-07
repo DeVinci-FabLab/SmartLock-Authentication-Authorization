@@ -1,15 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
 from typing import List
 
-from src.database.session import get_db
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
 from src.core.keycloak import require_admin
+from src.crud import crud_locker_permission as crud
+from src.database.session import get_db
+from src.models.lockers import Lockers
 from src.schemas.locker_permission import (
     LockerPermissionCreate,
-    LockerPermissionUpdate,
     LockerPermissionResponse,
+    LockerPermissionUpdate,
 )
-from src.crud import crud_locker_permission as crud
 
 # On applique require_admin à l'ensemble du routeur !
 router = APIRouter(
@@ -23,6 +25,8 @@ router = APIRouter(
 def create_permission(
     locker_id: int, permission: LockerPermissionCreate, db: Session = Depends(get_db)
 ):
+    if not db.query(Lockers).filter(Lockers.id == locker_id).first():
+        raise HTTPException(status_code=404, detail="Locker not found")
     if locker_id != permission.locker_id:
         raise HTTPException(
             status_code=400,

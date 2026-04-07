@@ -1,11 +1,13 @@
 """
-Keycloak Admin REST API client
-==============================
+Keycloak Admin REST API client (lecture seule)
+===============================================
 Utilisé par l'API (service account smartlock-api) pour :
 - Rechercher un utilisateur par card_id
 - Récupérer ses rôles effectifs (directs + hérités des groupes parents)
-- Créer / modifier des utilisateurs
-- Gérer les groupes
+- Lister les utilisateurs et les groupes
+
+La création et la modification des utilisateurs, groupes et badges
+se font exclusivement via l'interface Keycloak.
 
 Toutes les fonctions sont async et utilisent httpx.AsyncClient.
 Le token service account est mis en cache jusqu'à 30s avant son expiration.
@@ -49,7 +51,8 @@ def _handle_keycloak_error(e: httpx.HTTPStatusError, context: str) -> None:
     if e.response.status_code == 401:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Service d'authentification indisponible (token service account invalide)",
+            detail="Service d'authentification indisponible"
+            " (token service account invalide)",
         )
     if e.response.status_code == 404:
         raise HTTPException(
@@ -146,8 +149,6 @@ async def get_user_effective_roles(user_id: str) -> list[str]:
     """
     Retourne les rôles effectifs d'un utilisateur.
     Utilise /composite pour inclure les rôles hérités des groupes parents.
-    Ex : un user dans 'Atelier' (enfant de 'Adhérents') récupère
-         à la fois 'membre-atelier' ET 'membre'.
     """
     token = await get_admin_token()
     try:
@@ -239,62 +240,3 @@ async def list_users(
         _handle_keycloak_error(e, "list_users")
 
     return resp.json()
-
-
-async def set_user_card_id(user_id: str, card_id: str) -> None:
-    """
-    Associe un card_id à un utilisateur via ses attributs Keycloak.
-    Attention : ceci remplace tous les attributs existants — à utiliser
-    avec précaution si l'utilisateur a d'autres attributs custom.
-    """
-    token = await get_admin_token()
-
-    # On récupère d'abord les attributs existants pour ne pas les écraser
-    user = await get_user(user_id)
-    attributes = user.get("attributes", {})
-    attributes["card_id"] = [card_id]
-
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.put(
-                f"{_admin_base()}/users/{user_id}",
-                json={"attributes": attributes},
-                headers=_auth_headers(token),
-            )
-            resp.raise_for_status()
-    except httpx.HTTPStatusError as e:
-        _handle_keycloak_error(e, "set_user_card_id")
-
-    logger.info(f"card_id={card_id} associé à user={user_id}")
-
-
-async def assign_user_to_group(user_id: str, group_id: str) -> None:
-    """Ajoute un utilisateur dans un groupe Keycloak."""
-    token = await get_admin_token()
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.put(
-                f"{_admin_base()}/users/{user_id}/groups/{group_id}",
-                headers=_auth_headers(token),
-            )
-            resp.raise_for_status()
-    except httpx.HTTPStatusError as e:
-        _handle_keycloak_error(e, "assign_user_to_group")
-
-    logger.info(f"user={user_id} ajouté au groupe={group_id}")
-
-
-async def remove_user_from_group(user_id: str, group_id: str) -> None:
-    """Retire un utilisateur d'un groupe Keycloak."""
-    token = await get_admin_token()
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.delete(
-                f"{_admin_base()}/users/{user_id}/groups/{group_id}",
-                headers=_auth_headers(token),
-            )
-            resp.raise_for_status()
-    except httpx.HTTPStatusError as e:
-        _handle_keycloak_error(e, "remove_user_from_group")
-
-    logger.info(f"user={user_id} retiré du groupe={group_id}")

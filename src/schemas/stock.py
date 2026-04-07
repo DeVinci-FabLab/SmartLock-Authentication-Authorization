@@ -1,10 +1,7 @@
-from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
-from typing import Optional, TYPE_CHECKING
+from typing import Optional
 
-if TYPE_CHECKING:
-    from .items import ItemResponse
-    from .lockers import LockerResponse
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class StockBase(BaseModel):
@@ -33,9 +30,3 @@ class StockResponse(StockBase):
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
-
-
-class StockWithDetails(StockResponse):
-    # 3. Use strings "ItemResponse" instead of the actual class object
-    item: Optional["ItemResponse"] = None
-    locker: Optional["LockerResponse"] = None

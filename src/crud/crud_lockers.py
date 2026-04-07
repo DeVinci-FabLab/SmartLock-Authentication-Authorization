@@ -1,6 +1,7 @@
 from typing import List
-from sqlalchemy.orm import Session
+
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
 from src.models.lockers import Lockers
 from src.models.stock import Stock

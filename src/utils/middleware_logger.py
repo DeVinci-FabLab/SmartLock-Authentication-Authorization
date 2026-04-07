@@ -7,8 +7,8 @@ Logs all HTTP requests and responses with timing information
 
 import time
 import uuid
-import sys
 from typing import Callable
+
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
@@ -72,7 +72,8 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
             # Log response
             logger.bind(request_id=request_id).info(
-                f"Request completed: {request.method} {request.url.path} - {response.status_code} ({duration:.3f}s)",
+                f"{request.method} {request.url.path}"
+                f" - {response.status_code} ({duration:.3f}s)",
                 extra={
                     "method": request.method,
                     "path": request.url.path,
@@ -90,7 +91,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             duration = time.time() - start_time
 
             logger.bind(request_id=request_id).error(
-                f"Request failed: {request.method} {request.url.path} - {str(e)} ({duration:.3f}s)",
+                f"{request.method} {request.url.path} - {e} ({duration:.3f}s)",
                 extra={
                     "method": request.method,
                     "path": request.url.path,
@@ -99,30 +100,3 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                 },
             )
             raise
-
-
-class LoguruInterceptHandler:
-    """
-    Intercept standard logging and redirect to Loguru
-    Useful for third-party libraries that use standard logging
-    """
-
-    def __init__(self, level: str = "INFO"):
-        self.level = level
-
-    def __call__(self, record):
-        # Get corresponding Loguru level
-        try:
-            level = logger.level(record.levelname).name
-        except ValueError:
-            level = self.level
-
-        # Find caller from where the logged message originated
-        frame, depth = sys._getframe(6), 6
-        while frame and frame.f_code.co_filename == __file__:
-            frame = frame.f_back
-            depth += 1
-
-        logger.opt(depth=depth, exception=record.exc_info).log(
-            level, record.getMessage()
-        )
