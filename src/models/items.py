@@ -8,8 +8,8 @@ class Items(Base):
     __tablename__ = "items"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, index=True)
-    reference = Column(String, unique=True, index=True)
+    name = Column(String, index=True, nullable=False)
+    reference = Column(String, unique=True, index=True, nullable=False)
     description = Column(String)
     category_id = Column(
         Integer, ForeignKey("categories.id", ondelete="CASCADE"), nullable=False

@@ -24,7 +24,7 @@ def upgrade() -> None:
     op.create_table(
         "lockers",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("locker_type", sa.String(), nullable=True),
+        sa.Column("locker_type", sa.String(), nullable=False),
         sa.Column("is_active", sa.Boolean(), nullable=True),
         sa.Column(
             "created_at",
@@ -49,7 +49,7 @@ def upgrade() -> None:
     op.create_table(
         "categories",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("name", sa.String(), nullable=True),
+        sa.Column("name", sa.String(), nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -101,8 +101,8 @@ def upgrade() -> None:
     op.create_table(
         "items",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("name", sa.String(), nullable=True),
-        sa.Column("reference", sa.String(), nullable=True),
+        sa.Column("name", sa.String(), nullable=False),
+        sa.Column("reference", sa.String(), nullable=False),
         sa.Column("description", sa.String(), nullable=True),
         sa.Column("category_id", sa.Integer(), nullable=False),
         sa.Column(
@@ -130,6 +130,9 @@ def upgrade() -> None:
     op.create_index(
         op.f("ix_items_reference"), "items", ["reference"], unique=False
     )
+    op.create_index(
+        op.f("ix_items_category_id"), "items", ["category_id"], unique=False
+    )
 
     # --- Stock (dépend de items + lockers) ---
     op.create_table(
@@ -154,8 +157,17 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["item_id"], ["items.id"]),
         sa.ForeignKeyConstraint(["locker_id"], ["lockers.id"]),
         sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint(
+            "item_id", "locker_id", name="unique_stock_item_locker"
+        ),
     )
     op.create_index(op.f("ix_stock_id"), "stock", ["id"], unique=False)
+    op.create_index(
+        op.f("ix_stock_item_id"), "stock", ["item_id"], unique=False
+    )
+    op.create_index(
+        op.f("ix_stock_locker_id"), "stock", ["locker_id"], unique=False
+    )
 
     # --- Locker Permissions (dépend de lockers) ---
     op.create_table(
@@ -245,6 +257,12 @@ def upgrade() -> None:
         op.f("ix_access_logs_user_id"),
         "access_logs",
         ["user_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_access_logs_locker_id"),
+        "access_logs",
+        ["locker_id"],
         unique=False,
     )
 

@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from src.core.keycloak import require_admin, validate_jwt
 from src.crud import crud_stock
 from src.database.session import get_db
+from src.models.items import Items
+from src.models.lockers import Lockers
 from src.schemas.stock import StockCreate, StockResponse, StockUpdate
 from src.utils.logger import logger
 
@@ -69,6 +71,11 @@ def read_stock(stock_id: int, db: Session = Depends(get_db)):
 def create_stock(stock: StockCreate, db: Session = Depends(get_db)):
     """Create a new stock entry."""
     logger.info(f"POST /stock called for item_id: {stock.item_id}")
+
+    if not db.query(Items).filter(Items.id == stock.item_id).first():
+        raise HTTPException(status_code=404, detail="Item not found")
+    if not db.query(Lockers).filter(Lockers.id == stock.locker_id).first():
+        raise HTTPException(status_code=404, detail="Locker not found")
 
     try:
         new_stock = crud_stock.create_stock(db, stock=stock)

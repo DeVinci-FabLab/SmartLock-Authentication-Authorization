@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from src.core.keycloak import require_admin, validate_jwt
 from src.crud import crud_items
 from src.database.session import get_db
+from src.models.categories import Categories
 from src.schemas.items import ItemCreate, ItemResponse, ItemUpdate
 from src.utils.logger import logger
 
@@ -69,6 +70,9 @@ def read_item(item_id: int, db: Session = Depends(get_db)):
 def create_item(item: ItemCreate, db: Session = Depends(get_db)):
     """Create a new item."""
     logger.info(f"POST /items called with item name: {item.name}")
+
+    if not db.query(Categories).filter(Categories.id == item.category_id).first():
+        raise HTTPException(status_code=404, detail="Category not found")
 
     try:
         new_item = crud_items.create_item(db, item=item)

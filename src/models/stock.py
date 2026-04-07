@@ -4,6 +4,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import relationship
@@ -26,3 +27,9 @@ class Stock(Base):
 
     item = relationship("Items", back_populates="stock")
     locker = relationship("Lockers", back_populates="stock")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "item_id", "locker_id", name="unique_stock_item_locker"
+        ),
+    )

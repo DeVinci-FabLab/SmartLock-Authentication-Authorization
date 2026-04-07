@@ -8,7 +8,7 @@ class Lockers(Base):
     __tablename__ = "lockers"
 
     id = Column(Integer, primary_key=True, index=True)
-    locker_type = Column(String, index=True)
+    locker_type = Column(String, index=True, nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=func.now())
     updated_at = Column(
