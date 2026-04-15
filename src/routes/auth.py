@@ -4,8 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from src.core.keycloak import require_locker_client
-from src.core.keycloak_admin import find_user_by_card_id, get_user_effective_roles
+from src.core.keycloak import ROLE_ADMIN, require_admin, require_codir, require_locker_client
+from src.core.keycloak_admin import (
+    add_role_to_user,
+    find_user_by_card_id,
+    get_user_effective_roles,
+    remove_role_from_user,
+)
 from src.crud.crud_access_log import create_access_log
 from src.database.session import get_db
 from src.models.locker_permission import Locker_Permission
@@ -37,7 +42,7 @@ def _is_expired(valid_until: str | None, now: datetime) -> bool:
         expiry = datetime.fromisoformat(valid_until)
         if expiry.tzinfo is None:
             expiry = expiry.replace(tzinfo=timezone.utc)
-        return expiry < now
+        return expiry <= now
     except (ValueError, TypeError):
         logger.warning(f"Format valid_until invalide: {valid_until}")
         return False
@@ -219,3 +224,53 @@ async def check_locker_access(
             display_name=display_name,
             reason=reason,
         )
+
+
+# -------------------------------------------------------------------
+# Élévation temporaire : codir → admin
+# -------------------------------------------------------------------
+
+
+@router.post(
+    "/elevate",
+    summary="Codir s'attribue temporairement le rôle admin",
+)
+async def elevate_to_admin(
+    payload: dict = Depends(require_codir),
+):
+    """
+    Permet à un membre du codir de s'attribuer temporairement le rôle admin.
+    Le rôle admin est ajouté directement sur l'utilisateur dans Keycloak.
+    Pour retirer le rôle, utiliser POST /auth/revoke-admin.
+    """
+    user_id = payload["sub"]
+    roles = payload.get("realm_access", {}).get("roles", [])
+
+    if ROLE_ADMIN in roles:
+        return {"message": "Vous disposez déjà du rôle admin."}
+
+    await add_role_to_user(user_id, ROLE_ADMIN)
+    logger.info(f"Élévation admin accordée au codir {user_id}")
+    return {"message": "Rôle admin accordé temporairement. Reconnectez-vous pour l'activer."}
+
+
+# -------------------------------------------------------------------
+# Révocation : admin renonce à son rôle admin
+# -------------------------------------------------------------------
+
+
+@router.post(
+    "/revoke-admin",
+    summary="Un admin renonce à son rôle admin",
+)
+async def revoke_admin(
+    payload: dict = Depends(require_admin),
+):
+    """
+    Permet à un administrateur de retirer son propre rôle admin.
+    Utilisé par les codirs qui se sont élevés temporairement.
+    """
+    user_id = payload["sub"]
+    await remove_role_from_user(user_id, ROLE_ADMIN)
+    logger.info(f"Rôle admin révoqué pour l'utilisateur {user_id}")
+    return {"message": "Rôle admin révoqué. Reconnectez-vous pour l'appliquer."}

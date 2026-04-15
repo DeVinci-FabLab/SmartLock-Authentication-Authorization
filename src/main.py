@@ -19,6 +19,7 @@ from src.routes import (
     items,
     locker_permission,
     lockers,
+    roles,
     stock,
     users,
 )
@@ -169,6 +170,7 @@ app.include_router(locker_permission.router)
 app.include_router(badge.router)
 app.include_router(auth.router)
 app.include_router(users.router)
+app.include_router(roles.router)
 app.include_router(access_log.router)
 
 

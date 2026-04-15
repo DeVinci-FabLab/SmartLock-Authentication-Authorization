@@ -240,3 +240,68 @@ async def list_users(
         _handle_keycloak_error(e, "list_users")
 
     return resp.json()
+
+
+# ── Gestion des rôles ──────────────────────────────────────────────────────────
+
+
+async def get_realm_role(role_name: str) -> dict:
+    """
+    Retourne la représentation d'un rôle realm par son nom.
+    Nécessaire pour les opérations d'ajout/suppression de rôles.
+    """
+    token = await get_admin_token()
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{_admin_base()}/roles/{role_name}",
+                headers=_auth_headers(token),
+            )
+            resp.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        _handle_keycloak_error(e, f"get_realm_role({role_name})")
+
+    return resp.json()
+
+
+async def add_role_to_user(user_id: str, role_name: str) -> None:
+    """
+    Ajoute un rôle realm à un utilisateur.
+    Récupère d'abord la représentation du rôle, puis l'assigne.
+    """
+    role = await get_realm_role(role_name)
+    token = await get_admin_token()
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{_admin_base()}/users/{user_id}/role-mappings/realm",
+                json=[{"id": role["id"], "name": role["name"]}],
+                headers=_auth_headers(token),
+            )
+            resp.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        _handle_keycloak_error(e, f"add_role_to_user({user_id}, {role_name})")
+
+    logger.info(f"Rôle '{role_name}' ajouté à l'utilisateur {user_id}")
+
+
+async def remove_role_from_user(user_id: str, role_name: str) -> None:
+    """
+    Retire un rôle realm d'un utilisateur.
+    Récupère d'abord la représentation du rôle, puis le retire.
+    """
+    role = await get_realm_role(role_name)
+    token = await get_admin_token()
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.request(
+                "DELETE",
+                f"{_admin_base()}/users/{user_id}/role-mappings/realm",
+                json=[{"id": role["id"], "name": role["name"]}],
+                headers=_auth_headers(token),
+            )
+            resp.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        _handle_keycloak_error(e, f"remove_role_from_user({user_id}, {role_name})")
+
+    logger.info(f"Rôle '{role_name}' retiré de l'utilisateur {user_id}")

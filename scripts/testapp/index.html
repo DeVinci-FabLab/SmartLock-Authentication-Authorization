@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartLock — Test Dashboard</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22263a;
+      --border: #2e3352;
+      --accent: #4f6ef7;
+      --accent-dim: #2a3580;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #eab308;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      display: flex;
+      min-height: 100vh;
+    }
+    aside {
+      width: 220px;
+      min-height: 100vh;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 24px 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+    }
+    .logo { padding: 0 20px 24px; border-bottom: 1px solid var(--border); }
+    .logo h1 { font-size: 18px; font-weight: 700; color: var(--accent); }
+    .logo span { font-size: 11px; color: var(--muted); }
+    nav { padding: 16px 0; flex: 1; }
+    nav button {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%; padding: 10px 20px;
+      background: none; border: none; color: var(--muted);
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      text-align: left; transition: all .15s;
+    }
+    nav button:hover { color: var(--text); background: var(--surface2); }
+    nav button.active { color: var(--accent); background: var(--accent-dim); }
+    .status-pill {
+      margin: 0 16px 16px;
+      padding: 8px 12px;
+      border-radius: var(--radius);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+    .dot.ok { background: var(--green); }
+    .dot.err { background: var(--red); }
+    .dot.loading { background: var(--yellow); animation: blink 1s infinite; }
+    @keyframes blink { 0%,100%{opacity:1}50%{opacity:.3} }
+    main { flex: 1; padding: 32px; overflow-y: auto; }
+    h2 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+    .subtitle { color: var(--muted); margin-bottom: 24px; font-size: 13px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
+    .card-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 16px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+    textarea {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); padding: 10px;
+      font-size: 12px; font-family: monospace; resize: vertical; min-height: 60px;
+    }
+    textarea:focus { outline: none; border-color: var(--accent); }
+    button.btn {
+      background: var(--accent); color: #fff;
+      border: none; border-radius: 6px;
+      padding: 8px 16px; cursor: pointer;
+      font-size: 13px; font-weight: 600; white-space: nowrap; transition: opacity .15s;
+    }
+    button.btn:hover { opacity: .85; }
+    button.btn.secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    input, select {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); padding: 8px 12px; font-size: 13px; margin-bottom: 12px;
+    }
+    input:focus, select:focus { outline: none; border-color: var(--accent); }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 8px 12px; border-bottom: 1px solid var(--border); }
+    td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface2); }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+    .badge.green { background: #14532d; color: var(--green); }
+    .badge.red { background: #450a0a; color: var(--red); }
+    .badge.blue { background: var(--accent-dim); color: var(--accent); }
+    .badge.yellow { background: #422006; color: var(--yellow); }
+    pre.response-box {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; padding: 12px;
+      font-family: monospace; font-size: 12px;
+      max-height: 240px; overflow-y: auto;
+      white-space: pre-wrap; word-break: break-all;
+      color: #a3e635; margin: 0;
+    }
+    pre.response-box.error { color: var(--red); }
+    .stat { text-align: center; padding: 16px; }
+    .stat .val { font-size: 36px; font-weight: 800; color: var(--accent); }
+    .stat .lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .page { display: none; }
+    .page.active { display: block; }
+    .allowed-row td { border-left: 3px solid var(--green); }
+    .denied-row td { border-left: 3px solid var(--red); }
+    .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .token-row { display: flex; gap: 10px; }
+    .token-btns { display: flex; flex-direction: column; gap: 8px; }
+  </style>
+</head>
+<body>
+
+<aside>
+  <div class="logo">
+    <h1>SmartLock</h1>
+    <span>Test Dashboard</span>
+  </div>
+  <nav>
+    <button class="active" onclick="showPage('dashboard',this)">📊 Dashboard</button>
+    <button onclick="showPage('lockers',this)">🔒 Casiers</button>
+    <button onclick="showPage('items',this)">📦 Articles</button>
+    <button onclick="showPage('badge',this)">💳 Badge / NFC</button>
+    <button onclick="showPage('locker-check',this)">🚪 Contrôle accès</button>
+    <button onclick="showPage('logs',this)">📋 Logs d'accès</button>
+    <button onclick="showPage('token',this)">🔑 Token JWT</button>
+  </nav>
+  <div class="status-pill">
+    <span class="dot loading" id="api-dot"></span>
+    <span id="api-status">Vérification...</span>
+  </div>
+</aside>
+
+<main>
+
+  <!-- DASHBOARD -->
+  <div id="page-dashboard" class="page active">
+    <h2>Dashboard</h2>
+    <p class="subtitle">Vue d'ensemble de l'API SmartLock.</p>
+    <div class="grid3" style="margin-bottom:16px">
+      <div class="card stat"><div class="val" id="stat-lockers">—</div><div class="lbl">Casiers</div></div>
+      <div class="card stat"><div class="val" id="stat-items">—</div><div class="lbl">Articles</div></div>
+      <div class="card stat"><div class="val" id="stat-categories">—</div><div class="lbl">Catégories</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Santé de l'API</div>
+      <pre class="response-box" id="health-box">Chargement...</pre>
+    </div>
+    <div class="card">
+      <div class="card-title">Infos du token JWT actuel</div>
+      <pre class="response-box" id="token-info-box">Pas de token — allez dans "Token JWT"</pre>
+    </div>
+  </div>
+
+  <!-- LOCKERS -->
+  <div id="page-lockers" class="page">
+    <h2>Casiers</h2>
+    <p class="subtitle">Liste des casiers et leurs permissions.</p>
+    <div style="margin-bottom:16px">
+      <button class="btn" onclick="loadLockers()">Rafraîchir</button>
+    </div>
+    <div class="card">
+      <table>
+        <thead><tr><th>ID</th><th>Type</th><th>Actif</th><th>Permissions</th><th>Créé le</th></tr></thead>
+        <tbody id="lockers-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ITEMS -->
+  <div id="page-items" class="page">
+    <h2>Articles</h2>
+    <p class="subtitle">Catalogue des articles stockés.</p>
+    <div style="margin-bottom:16px"><button class="btn" onclick="loadItems()">Rafraîchir</button></div>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-title">Articles</div>
+        <table><thead><tr><th>Réf</th><th>Nom</th><th>Catégorie</th></tr></thead>
+          <tbody id="items-body"></tbody></table>
+      </div>
+      <div class="card">
+        <div class="card-title">Catégories</div>
+        <table><thead><tr><th>ID</th><th>Nom</th></tr></thead>
+          <tbody id="categories-body"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- BADGE -->
+  <div id="page-badge" class="page">
+    <h2>Badge / NFC</h2>
+    <p class="subtitle">Simuler un scan de badge (token service account nfc-scanner requis).</p>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-title">Enregistrer un scan</div>
+        <label>Card ID (format AA:BB:CC:DD:EE)</label>
+        <input id="scan-card-id" value="AA:BB:CC:DD:EE" />
+        <button class="btn" onclick="scanBadge()">Envoyer le scan</button>
+        <pre class="response-box" id="scan-response" style="margin-top:12px">—</pre>
+      </div>
+      <div class="card">
+        <div class="card-title">Cartes en attente (admin requis)</div>
+        <button class="btn secondary" onclick="loadPendingCards()" style="margin-bottom:12px">Rafraîchir</button>
+        <table><thead><tr><th>Card ID</th><th>Scanné le</th><th>Status</th></tr></thead>
+          <tbody id="pending-body"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOCKER CHECK -->
+  <div id="page-locker-check" class="page">
+    <h2>Contrôle d'accès casier</h2>
+    <p class="subtitle">Simuler la vérification d'un badge sur un casier (token smartlock-lockers requis).</p>
+    <div class="card" style="max-width:480px">
+      <div class="card-title">Paramètres</div>
+      <label>Locker ID</label>
+      <input id="check-locker-id" type="number" value="1" />
+      <label>Card ID</label>
+      <input id="check-card-id" value="AA:BB:CC:DD:EE" />
+      <button class="btn" onclick="checkLockerAccess()">Vérifier l'accès</button>
+    </div>
+    <div class="card" id="check-result-card" style="display:none; max-width:480px">
+      <div class="card-title">Résultat</div>
+      <pre class="response-box" id="check-response">—</pre>
+    </div>
+  </div>
+
+  <!-- LOGS -->
+  <div id="page-logs" class="page">
+    <h2>Logs d'accès</h2>
+    <p class="subtitle">Historique des accès aux casiers (codir ou admin requis).</p>
+    <div style="margin-bottom:16px; display:flex; gap:10px; align-items:center;">
+      <button class="btn" onclick="loadLogs()">Rafraîchir</button>
+      <label style="margin:0; color:var(--muted); white-space:nowrap">Casier ID (optionnel)</label>
+      <input id="log-locker-filter" type="number" placeholder="tous" style="width:120px; margin:0" />
+    </div>
+    <div class="card">
+      <table>
+        <thead><tr><th>ID</th><th>Casier</th><th>Card ID</th><th>Utilisateur</th><th>Résultat</th><th>Raison</th><th>Horodatage</th></tr></thead>
+        <tbody id="logs-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TOKEN -->
+  <div id="page-token" class="page">
+    <h2>Token JWT</h2>
+    <p class="subtitle">Collez votre Bearer token Keycloak. Il sera envoyé dans l'en-tête Authorization.</p>
+    <div class="card">
+      <div class="card-title">Token Bearer</div>
+      <div class="token-row">
+        <textarea id="jwt-input" placeholder="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."></textarea>
+        <div class="token-btns">
+          <button class="btn" onclick="saveToken()">Sauvegarder</button>
+          <button class="btn secondary" onclick="clearToken()">Effacer</button>
+        </div>
+      </div>
+      <pre class="response-box" id="token-decode-box" style="margin-top:12px">—</pre>
+    </div>
+    <div class="card">
+      <div class="card-title">Obtenir un token depuis Keycloak</div>
+      <div class="grid2">
+        <div>
+          <p style="color:var(--muted); margin-bottom:12px; font-size:12px">Token utilisateur (password grant)</p>
+          <label>Keycloak URL</label>
+          <input id="kc-url" value="https://auth.devinci-fablab.fr" />
+          <label>Realm</label>
+          <input id="kc-realm" value="dev" />
+          <label>Client ID</label>
+          <input id="kc-client" value="smartlock-api" />
+          <label>Client Secret (si client confidentiel)</label>
+          <input id="kc-client-secret" type="password" />
+          <label>Username</label>
+          <input id="kc-user" />
+          <label>Password</label>
+          <input id="kc-pass" type="password" />
+          <button class="btn" onclick="fetchUserToken()">Obtenir le token</button>
+        </div>
+        <div>
+          <p style="color:var(--muted); margin-bottom:12px; font-size:12px">Token service account (client credentials)</p>
+          <label>Client ID</label>
+          <input id="kc-sa-client" value="nfc-scanner" />
+          <label>Client Secret</label>
+          <input id="kc-sa-secret" type="password" />
+          <button class="btn secondary" onclick="fetchServiceToken()">Obtenir le token SA</button>
+          <p style="margin-top:10px; font-size:11px; color:var(--muted)">Utilise le même Keycloak URL/Realm que la colonne gauche.</p>
+        </div>
+      </div>
+      <pre class="response-box" id="kc-token-response" style="margin-top:16px">—</pre>
+    </div>
+  </div>
+
+</main>
+
+<script>
+'use strict';
+const API = 'http://localhost:8000';
+
+// ── HTML escaping (prevent XSS from API data rendered via DOM) ────────────────
+function esc(v) {
+  if (v === null || v === undefined) return '';
+  return String(v)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// ── DOM helpers ───────────────────────────────────────────────────────────────
+function setText(id, v) { document.getElementById(id).textContent = String(v); }
+function setCode(id, v) { document.getElementById(id).textContent = typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v); }
+
+function makeTr(cells, cls) {
+  const tr = document.createElement('tr');
+  if (cls) tr.className = cls;
+  cells.forEach(c => {
+    const td = document.createElement('td');
+    if (c instanceof Node) td.appendChild(c);
+    else td.textContent = String(c ?? '—');
+    tr.appendChild(td);
+  });
+  return tr;
+}
+
+function makeBadge(text, color) {
+  const span = document.createElement('span');
+  span.className = 'badge ' + color;
+  span.textContent = text;
+  return span;
+}
+
+function makeCode(text) {
+  const code = document.createElement('code');
+  code.style.fontSize = '11px';
+  code.textContent = text;
+  return code;
+}
+
+function clearTbody(id) {
+  const el = document.getElementById(id);
+  while (el.firstChild) el.removeChild(el.firstChild);
+  return el;
+}
+
+function tbodyLoading(id, cols) {
+  const tbody = clearTbody(id);
+  const tr = document.createElement('tr');
+  const td = document.createElement('td');
+  td.colSpan = cols;
+  const s = document.createElement('span');
+  s.className = 'spinner';
+  td.appendChild(s);
+  tr.appendChild(td);
+  tbody.appendChild(tr);
+}
+
+function tbodyMsg(id, msg, cols, color) {
+  const tbody = clearTbody(id);
+  const tr = document.createElement('tr');
+  const td = document.createElement('td');
+  td.colSpan = cols;
+  td.style.color = color || 'var(--muted)';
+  td.textContent = msg;
+  tr.appendChild(td);
+  tbody.appendChild(tr);
+}
+
+// ── Token management ──────────────────────────────────────────────────────────
+let TOKEN = localStorage.getItem('sl_token') || '';
+
+function saveToken() {
+  TOKEN = document.getElementById('jwt-input').value.trim().replace(/^Bearer\s+/i, '');
+  localStorage.setItem('sl_token', TOKEN);
+  decodeAndShowToken();
+}
+
+function clearToken() {
+  TOKEN = '';
+  localStorage.removeItem('sl_token');
+  document.getElementById('jwt-input').value = '';
+  setText('token-decode-box', '—');
+  setText('token-info-box', 'Pas de token');
+}
+
+function decodeAndShowToken() {
+  if (!TOKEN) return;
+  try {
+    const payload = TOKEN.split('.')[1];
+    const data = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+    const pretty = JSON.stringify(data, null, 2);
+    setText('token-decode-box', pretty);
+    setText('token-info-box', pretty);
+  } catch {
+    setText('token-decode-box', 'Token invalide (impossible à décoder)');
+  }
+}
+
+// ── API helpers ───────────────────────────────────────────────────────────────
+function authHeaders() {
+  const h = { 'Content-Type': 'application/json' };
+  if (TOKEN) h['Authorization'] = 'Bearer ' + TOKEN;
+  return h;
+}
+
+async function apiFetch(path, opts) {
+  opts = opts || {};
+  opts.headers = Object.assign(authHeaders(), opts.headers || {});
+  const r = await fetch(API + path, opts);
+  const body = await r.text();
+  let data;
+  try { data = JSON.parse(body); } catch { data = body; }
+  return { ok: r.ok, status: r.status, data };
+}
+
+// ── Page routing ──────────────────────────────────────────────────────────────
+function showPage(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (id === 'dashboard')    loadDashboard();
+  if (id === 'lockers')      loadLockers();
+  if (id === 'items')        loadItems();
+  if (id === 'logs')         loadLogs();
+  if (id === 'token') {
+    document.getElementById('jwt-input').value = TOKEN;
+    decodeAndShowToken();
+  }
+}
+
+// ── Health ────────────────────────────────────────────────────────────────────
+async function checkHealth() {
+  const dot = document.getElementById('api-dot');
+  const lbl = document.getElementById('api-status');
+  dot.className = 'dot loading'; lbl.textContent = 'Vérification...';
+  try {
+    const r = await apiFetch('/health');
+    if (r.ok) {
+      dot.className = 'dot ok'; lbl.textContent = 'API en ligne';
+      setCode('health-box', r.data);
+    } else {
+      dot.className = 'dot err'; lbl.textContent = 'Erreur ' + r.status;
+    }
+  } catch {
+    dot.className = 'dot err'; lbl.textContent = 'Inaccessible';
+    setText('health-box', 'Impossible de joindre http://localhost:8000');
+  }
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+async function loadDashboard() {
+  checkHealth();
+  decodeAndShowToken();
+  const [lockers, items, cats] = await Promise.all([
+    apiFetch('/lockers/'), apiFetch('/items/'), apiFetch('/categories/')
+  ]);
+  setText('stat-lockers',    lockers.ok ? lockers.data.length : '?');
+  setText('stat-items',      items.ok   ? items.data.length   : '?');
+  setText('stat-categories', cats.ok    ? cats.data.length    : '?');
+}
+
+// ── Lockers ───────────────────────────────────────────────────────────────────
+async function loadLockers() {
+  tbodyLoading('lockers-body', 5);
+  const r = await apiFetch('/lockers/');
+  const tbody = clearTbody('lockers-body');
+  if (!r.ok) {
+    tbodyMsg('lockers-body', 'Erreur ' + r.status + ' — vérifiez votre token', 5, 'var(--red)');
+    return;
+  }
+  if (!r.data.length) { tbodyMsg('lockers-body', 'Aucun casier', 5); return; }
+
+  r.data.forEach(l => {
+    const permsDiv = document.createElement('div');
+    permsDiv.id = 'perms-' + l.id;
+    permsDiv.style.marginTop = '6px';
+    permsDiv.style.fontSize = '11px';
+    permsDiv.style.color = 'var(--muted)';
+
+    const permsBtn = document.createElement('button');
+    permsBtn.className = 'btn secondary';
+    permsBtn.style.cssText = 'padding:4px 10px; font-size:11px';
+    permsBtn.textContent = 'Voir permissions';
+    permsBtn.onclick = () => loadLockerPerms(l.id);
+
+    const permCell = document.createElement('td');
+    permCell.appendChild(permsBtn);
+    permCell.appendChild(permsDiv);
+
+    const tr = document.createElement('tr');
+
+    const tdId = document.createElement('td'); tdId.textContent = l.id;
+    const tdType = document.createElement('td');
+    const strong = document.createElement('strong'); strong.textContent = l.locker_type;
+    tdType.appendChild(strong);
+
+    const tdActive = document.createElement('td');
+    tdActive.appendChild(makeBadge(l.is_active ? 'Actif' : 'Inactif', l.is_active ? 'green' : 'red'));
+
+    const tdDate = document.createElement('td');
+    tdDate.style.color = 'var(--muted)';
+    tdDate.textContent = l.created_at ? new Date(l.created_at).toLocaleDateString('fr') : '—';
+
+    tr.appendChild(tdId);
+    tr.appendChild(tdType);
+    tr.appendChild(tdActive);
+    tr.appendChild(permCell);
+    tr.appendChild(tdDate);
+    tbody.appendChild(tr);
+  });
+}
+
+async function loadLockerPerms(lockerId) {
+  const div = document.getElementById('perms-' + lockerId);
+  div.textContent = 'Chargement...';
+  const r = await apiFetch('/lockers/' + lockerId + '/permissions');
+  while (div.firstChild) div.removeChild(div.firstChild);
+  if (!r.ok) { div.textContent = 'Erreur ' + r.status; return; }
+  if (!r.data.length) { div.textContent = 'Aucune permission'; return; }
+  r.data.forEach(p => {
+    const target = p.subject_type === 'role'
+      ? 'rôle:' + p.role_name
+      : 'user:' + (p.user_id || '').slice(0, 8) + '…';
+    const perms = ['can_view','can_open','can_edit','can_take','can_manage']
+      .filter(k => p[k]).map(k => k.replace('can_', '').toUpperCase()).join(' ');
+    const badge = makeBadge(target + ' → ' + (perms || 'none'), 'blue');
+    badge.style.margin = '2px';
+    div.appendChild(badge);
+  });
+}
+
+// ── Items & Categories ────────────────────────────────────────────────────────
+async function loadItems() {
+  tbodyLoading('items-body', 3);
+  tbodyLoading('categories-body', 2);
+  const [itemsR, catsR] = await Promise.all([apiFetch('/items/'), apiFetch('/categories/')]);
+
+  const catsMap = {};
+  if (catsR.ok) {
+    const tbody = clearTbody('categories-body');
+    catsR.data.forEach(c => {
+      catsMap[c.id] = c.name;
+      tbody.appendChild(makeTr([c.id, c.name]));
+    });
+    if (!catsR.data.length) tbodyMsg('categories-body', 'Aucune catégorie', 2);
+  } else {
+    tbodyMsg('categories-body', 'Erreur ' + catsR.status, 2, 'var(--red)');
+  }
+
+  if (!itemsR.ok) {
+    tbodyMsg('items-body', 'Erreur ' + itemsR.status, 3, 'var(--red)');
+    return;
+  }
+  const tbody = clearTbody('items-body');
+  if (!itemsR.data.length) { tbodyMsg('items-body', 'Aucun article', 3); return; }
+  itemsR.data.forEach(i => {
+    const refCell = makeCode(i.reference);
+    const catBadge = makeBadge(catsMap[i.category_id] || i.category_id, 'blue');
+    tbody.appendChild(makeTr([refCell, i.name, catBadge]));
+  });
+}
+
+// ── Badge / NFC ───────────────────────────────────────────────────────────────
+async function scanBadge() {
+  const cardId = document.getElementById('scan-card-id').value.trim();
+  const box = document.getElementById('scan-response');
+  box.textContent = 'Envoi...'; box.className = 'response-box';
+  const r = await apiFetch('/badge/scan', { method: 'POST', body: JSON.stringify({ card_id: cardId }) });
+  box.className = 'response-box' + (r.ok ? '' : ' error');
+  box.textContent = 'HTTP ' + r.status + '\n\n' + JSON.stringify(r.data, null, 2);
+}
+
+async function loadPendingCards() {
+  tbodyLoading('pending-body', 3);
+  const r = await apiFetch('/badge/pending');
+  const tbody = clearTbody('pending-body');
+  if (!r.ok) { tbodyMsg('pending-body', 'Erreur ' + r.status, 3, 'var(--red)'); return; }
+  if (!r.data.length) { tbodyMsg('pending-body', 'Aucune carte en attente', 3); return; }
+  r.data.forEach(c => {
+    const code = makeCode(c.card_id);
+    const date = new Date(c.scanned_at).toLocaleString('fr');
+    const badge = makeBadge(c.status, c.status === 'pending' ? 'yellow' : 'green');
+    tbody.appendChild(makeTr([code, date, badge]));
+  });
+}
+
+// ── Locker check ──────────────────────────────────────────────────────────────
+async function checkLockerAccess() {
+  const lockerId = document.getElementById('check-locker-id').value;
+  const cardId   = document.getElementById('check-card-id').value.trim();
+  const box      = document.getElementById('check-response');
+  document.getElementById('check-result-card').style.display = 'block';
+  box.textContent = 'Vérification...'; box.style.color = '';
+  const r = await apiFetch('/auth/locker/' + lockerId + '/check', {
+    method: 'POST', body: JSON.stringify({ card_id: cardId })
+  });
+  box.style.color = r.data && r.data.allowed ? 'var(--green)' : 'var(--red)';
+  box.textContent = 'HTTP ' + r.status + '\n\n' + JSON.stringify(r.data, null, 2);
+}
+
+// ── Logs ──────────────────────────────────────────────────────────────────────
+async function loadLogs() {
+  tbodyLoading('logs-body', 7);
+  const filter = document.getElementById('log-locker-filter').value;
+  const qs = filter ? '?locker_id=' + encodeURIComponent(filter) : '';
+  const r = await apiFetch('/logs/' + qs);
+  const tbody = clearTbody('logs-body');
+  if (!r.ok) { tbodyMsg('logs-body', 'Erreur ' + r.status + ' — token codir/admin requis', 7, 'var(--red)'); return; }
+  if (!r.data.length) { tbodyMsg('logs-body', 'Aucun log', 7); return; }
+  r.data.slice().reverse().forEach(l => {
+    const resultBadge = makeBadge(l.result, l.result === 'allowed' ? 'green' : 'red');
+    const ts = new Date(l.timestamp).toLocaleString('fr');
+    const cls = l.result === 'allowed' ? 'allowed-row' : 'denied-row';
+    tbody.appendChild(makeTr([
+      l.id, l.locker_id, makeCode(l.card_id),
+      l.username || (l.user_id ? l.user_id.slice(0, 8) + '…' : '—'),
+      resultBadge, l.reason || '—', ts
+    ], cls));
+  });
+}
+
+// ── Keycloak token (via proxy local pour éviter CORS) ────────────────────────
+const PROXY = 'http://localhost:3001';
+
+async function kcPost(kcUrl, formData) {
+  const r = await fetch(PROXY, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: kcUrl, data: formData })
+  });
+  return r.json();
+}
+
+async function applyToken(data, box) {
+  if (data.access_token) {
+    TOKEN = data.access_token;
+    localStorage.setItem('sl_token', TOKEN);
+    document.getElementById('jwt-input').value = TOKEN;
+    decodeAndShowToken();
+    box.textContent = '✅ Token obtenu et sauvegardé !\nExpire dans : ' + data.expires_in + 's';
+  } else {
+    box.className = 'response-box error';
+    box.textContent = JSON.stringify(data, null, 2);
+  }
+}
+
+async function fetchUserToken() {
+  const url          = document.getElementById('kc-url').value;
+  const realm        = document.getElementById('kc-realm').value;
+  const client       = document.getElementById('kc-client').value;
+  const clientSecret = document.getElementById('kc-client-secret').value;
+  const user         = document.getElementById('kc-user').value;
+  const pass         = document.getElementById('kc-pass').value;
+  const box          = document.getElementById('kc-token-response');
+  box.textContent = 'Requête en cours...'; box.className = 'response-box';
+  const params = { grant_type: 'password', client_id: client, username: user, password: pass };
+  if (clientSecret) params.client_secret = clientSecret;
+  try {
+    const data = await kcPost(url + '/realms/' + realm + '/protocol/openid-connect/token', params);
+    await applyToken(data, box);
+  } catch (e) {
+    box.className = 'response-box error';
+    box.textContent = 'Erreur proxy : ' + e.message + '\n\nLance proxy.py : python scripts/testapp/proxy.py';
+  }
+}
+
+async function fetchServiceToken() {
+  const url    = document.getElementById('kc-url').value;
+  const realm  = document.getElementById('kc-realm').value;
+  const client = document.getElementById('kc-sa-client').value;
+  const secret = document.getElementById('kc-sa-secret').value;
+  const box    = document.getElementById('kc-token-response');
+  box.textContent = 'Requête en cours...'; box.className = 'response-box';
+  try {
+    const data = await kcPost(
+      url + '/realms/' + realm + '/protocol/openid-connect/token',
+      { grant_type: 'client_credentials', client_id: client, client_secret: secret }
+    );
+    await applyToken(data, box);
+  } catch (e) {
+    box.className = 'response-box error';
+    box.textContent = 'Erreur proxy : ' + e.message + '\n\nLance proxy.py : python scripts/testapp/proxy.py';
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.getElementById('jwt-input').value = TOKEN;
+if (TOKEN) decodeAndShowToken();
+checkHealth();
+loadDashboard();
+setInterval(checkHealth, 30_000);
+</script>
+</body>
+</html>

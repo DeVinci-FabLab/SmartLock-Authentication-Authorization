@@ -1,9 +1,13 @@
 """
 Keycloak integration
 ====================
-- validate_jwt()        : vérifie le Bearer JWT (admins ET service accounts)
-- require_role()        : vérifie qu'un rôle Keycloak est présent dans le token
-- is_nfc_scanner()      : vérifie que le token appartient au service account nfc-scanner
+- validate_jwt()                  : vérifie le Bearer JWT (admins ET service accounts)
+- require_admin()                 : rôle 'admin' requis
+- require_codir_or_admin()        : rôle 'codir' ou 'admin' requis
+- require_materialiste_or_above() : rôle 'materialiste', 'codir' ou 'admin' requis
+- require_codir()                 : rôle 'codir' requis (élévation temporaire)
+- require_nfc_scanner()           : service account nfc-scanner
+- require_locker_client()         : service account smartlock-lockers
 """
 
 import httpx
@@ -16,7 +20,25 @@ from src.utils.logger import logger
 
 bearer_scheme = HTTPBearer()
 
+# ── Service account client IDs ─────────────────────────────────────────────────
 NFC_SCANNER_CLIENT_ID = "nfc-scanner"
+LOCKER_CLIENT_ID = "smartlock-lockers"
+
+# ── Realm role constants ───────────────────────────────────────────────────────
+ROLE_MEMBRE = "membre"
+ROLE_3D = "3d"
+ROLE_ELECTRONIQUE = "electronique"
+ROLE_TEXTILE = "textile"
+ROLE_MATERIALISTE = "materialiste"
+ROLE_CODIR = "codir"
+ROLE_ADMIN = "admin"
+
+# Roles manageable by materialiste or above (give/revoke)
+ROLES_MANAGED_BY_MATERIALISTE = {ROLE_MEMBRE, ROLE_3D}
+# Roles manageable by codir or above (give/revoke)
+ROLES_MANAGED_BY_CODIR = {ROLE_ELECTRONIQUE, ROLE_TEXTILE, ROLE_MATERIALISTE, ROLE_ADMIN}
+# Roles manageable by admin only (give/revoke)
+ROLES_MANAGED_BY_ADMIN_ONLY = {ROLE_CODIR}
 
 
 def _jwks_uri() -> str:
@@ -118,10 +140,71 @@ async def require_admin(
     Vérifie que le token contient le rôle 'admin' dans realm_access.roles.
     """
     roles = payload.get("realm_access", {}).get("roles", [])
-    if "admin" not in roles:
+    if ROLE_ADMIN not in roles:
         logger.warning(f"Accès refusé — roles={roles}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Accès réservé aux administrateurs",
+        )
+    return payload
+
+
+# -------------------------------------------------------------------
+# Dependency : réservé aux codirs ET admins
+# -------------------------------------------------------------------
+async def require_codir_or_admin(
+    payload: dict = Depends(validate_jwt),
+) -> dict:
+    """
+    Vérifie que le token contient le rôle 'codir' ou 'admin'.
+    Utilisé pour les opérations de gestion des rôles électronique, textile,
+    matérialiste, admin et pour donner le rôle admin.
+    """
+    roles = payload.get("realm_access", {}).get("roles", [])
+    if ROLE_CODIR not in roles and ROLE_ADMIN not in roles:
+        logger.warning(f"Accès refusé — roles={roles}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès réservé aux codirs et administrateurs",
+        )
+    return payload
+
+
+# -------------------------------------------------------------------
+# Dependency : réservé aux matérialistes, codirs ET admins
+# -------------------------------------------------------------------
+async def require_materialiste_or_above(
+    payload: dict = Depends(validate_jwt),
+) -> dict:
+    """
+    Vérifie que le token contient le rôle 'materialiste', 'codir' ou 'admin'.
+    Utilisé pour les opérations de gestion des rôles membre et 3d.
+    """
+    roles = payload.get("realm_access", {}).get("roles", [])
+    if not {ROLE_MATERIALISTE, ROLE_CODIR, ROLE_ADMIN}.intersection(roles):
+        logger.warning(f"Accès refusé — roles={roles}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès réservé aux matérialistes, codirs et administrateurs",
+        )
+    return payload
+
+
+# -------------------------------------------------------------------
+# Dependency : réservé aux codirs uniquement (élévation temporaire)
+# -------------------------------------------------------------------
+async def require_codir(
+    payload: dict = Depends(validate_jwt),
+) -> dict:
+    """
+    Vérifie que le token contient le rôle 'codir'.
+    Utilisé pour l'auto-élévation au rôle admin (temporaire).
+    """
+    roles = payload.get("realm_access", {}).get("roles", [])
+    if ROLE_CODIR not in roles:
+        logger.warning(f"Accès refusé — roles={roles}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès réservé aux membres du codir",
         )
     return payload

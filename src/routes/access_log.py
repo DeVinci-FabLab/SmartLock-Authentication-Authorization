@@ -3,13 +3,13 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from src.core.keycloak import require_admin
+from src.core.keycloak import require_codir_or_admin
 from src.crud.crud_access_log import get_access_logs
 from src.database.session import get_db
 from src.schemas.access_log import AccessLogResponse
 
 router = APIRouter(
-    prefix="/logs", tags=["Audit Logs"], dependencies=[Depends(require_admin)]
+    prefix="/logs", tags=["Audit Logs"], dependencies=[Depends(require_codir_or_admin)]
 )
 
 

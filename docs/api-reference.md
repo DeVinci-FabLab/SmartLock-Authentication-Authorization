@@ -18,16 +18,17 @@ There are three types of tokens used by the system:
 
 | Client | Grant type | Who uses it | Access level |
 |---|---|---|---|
-| `smartlock-dashboard` | `password` | Admin users (dashboard frontend) | Full CRUD + user management (read) |
+| `smartlock-api` | `password` | Human users (dashboard, CLI) | Full CRUD + user management |
 | `smartlock-lockers` | `client_credentials` | Raspberry Pi terminals | `POST /auth/locker/{id}/check` only |
 | `nfc-scanner` | `client_credentials` | NFC scanner module | `POST /badge/scan` only |
 
-### Obtain an admin token (password grant)
+### Obtain a user token (password grant)
 
 ```bash
 curl -X POST "${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/token" \
   -d "grant_type=password" \
-  -d "client_id=smartlock-dashboard" \
+  -d "client_id=smartlock-api" \
+  -d "client_secret=${CLIENT_SECRET}" \
   -d "username=${USERNAME}" \
   -d "password=${PASSWORD}"
 ```
@@ -54,6 +55,7 @@ All errors follow this structure:
 ```
 
 Common HTTP status codes:
+
 - `401` — Missing or invalid token
 - `403` — Insufficient permissions (wrong role or wrong client)
 - `404` — Resource not found
@@ -351,11 +353,11 @@ Possible `reason` values: `card_not_registered`, `keycloak_error`, `no_permissio
 
 ### Audit Logs
 
-All log endpoints require **Admin** auth.
+All log endpoints require **Codir or Admin** auth.
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `GET` | `/logs/?skip=0&limit=100&locker_id=1` | Admin | List access logs (optional locker filter) |
+| `GET` | `/logs/?skip=0&limit=100&locker_id=1` | Codir or Admin | List access logs (optional locker filter) |
 
 **Response:**
 
@@ -386,3 +388,53 @@ All user endpoints require **Admin** auth. User/group creation and modification 
 |---|---|---|---|
 | `GET` | `/users?search=&first=0&max_results=100` | Admin | List Keycloak users |
 | `GET` | `/groups` | Admin | List Keycloak groups |
+
+---
+
+### Role Management
+
+Endpoints to assign or revoke Keycloak realm roles on users. Requires at minimum **Matérialiste** auth; some roles require higher privilege.
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/users/{user_id}/roles/{role_name}` | Matérialiste or above | Assign a role to a user |
+| `DELETE` | `/users/{user_id}/roles/{role_name}` | Matérialiste or above | Revoke a role from a user |
+
+**Role management permission matrix:**
+
+| Target role | Minimum requester role |
+|---|---|
+| `membre`, `3d` | Matérialiste, Codir, Admin |
+| `electronique`, `textile`, `materialiste` | Codir, Admin |
+| `codir`, `admin` | Admin only |
+
+**Responses:** `204 No Content` on success, `400` if role is unknown, `403` if insufficient privilege.
+
+---
+
+### Auth Elevation
+
+Endpoints allowing codir members to temporarily self-escalate to admin and then relinquish that privilege.
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/auth/elevate` | Codir | Self-assign the admin role in Keycloak |
+| `POST` | `/auth/revoke-admin` | Admin | Remove own admin role in Keycloak |
+
+> **Note:** After calling `/auth/elevate` or `/auth/revoke-admin`, the user must obtain a new token for the change to take effect (Keycloak tokens are not updated in place).
+
+**Elevate response (200):**
+
+```json
+{
+  "message": "Rôle admin accordé temporairement. Reconnectez-vous pour l'activer."
+}
+```
+
+**Revoke-admin response (200):**
+
+```json
+{
+  "message": "Rôle admin révoqué. Reconnectez-vous pour l'appliquer."
+}
+```

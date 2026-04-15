@@ -7,18 +7,21 @@ Reference: `docs/system-design.md`.
 
 ## Current State
 
+All items are now implemented.
+
 | Area | Status |
 |---|---|
-| JWT validation (`validate_jwt`, `require_admin`, `require_nfc_scanner`) | Done |
+| JWT validation (`validate_jwt`, `require_admin`, `require_nfc_scanner`, et al.) | Done |
 | NFC card scan/assign workflow (`/badge/*`) | Done |
 | CRUD for lockers, items, stock, categories | Done |
-| `locker_permissions` DB model | Done (structure only) |
-| `locker_permissions` CRUD + routes | Empty stub |
-| Locker auth check endpoint | Missing |
-| Keycloak Admin REST API integration | Missing |
-| Audit log | Missing |
-| Auth guards on standard CRUD routes | Missing |
-| User management endpoints (dashboard) | Missing |
+| `locker_permissions` DB model + CRUD + routes | Done |
+| Locker auth check endpoint (`POST /auth/locker/{id}/check`) | Done |
+| Keycloak Admin REST API integration (`src/core/keycloak_admin.py`) | Done |
+| Audit log (`access_logs` table + `GET /logs/`) | Done |
+| Auth guards on all CRUD routes | Done |
+| User management endpoints (`GET /users`, `GET /groups`) | Done |
+| Role management endpoints (`POST/DELETE /users/{id}/roles/{role}`) | Done |
+| Auth elevation endpoints (`POST /auth/elevate`, `POST /auth/revoke-admin`) | Done |
 
 ---
 
