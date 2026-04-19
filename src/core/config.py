@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     LOCKER_CLIENT_SECRET: str = ""
     NFC_CLIENT_SECRET: str = ""
 
+    CORS_ORIGINS: list[str] = ["*"]
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

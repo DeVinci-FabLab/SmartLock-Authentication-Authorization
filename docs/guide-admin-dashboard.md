@@ -82,7 +82,7 @@ async function refreshToken(refreshToken) {
 ### Helper pour les appels API
 
 ```javascript
-const API_URL = "http://localhost:8000";
+const API_URL = "https://api.smartlock.devinci-fablab.fr";
 
 async function api(method, path, body = null) {
   const options = {

@@ -1,201 +1,138 @@
-# Smartlock-Authentication-Authorization
+# SmartLock — Authentication & Authorization
 
-Core Auth and aut for the Smartlock project
+Core authentication and authorization service for the DeVinci Fablab smart locker system. Built with FastAPI, Keycloak, and PostgreSQL.
 
-## Deployment
+## What this service does
 
-### Keycloak
+- Validates NFC badge scans against Keycloak user attributes and locker permissions
+- Exposes a REST API for managing lockers, items, stock, categories, and access permissions
+- Proxies Keycloak user/group reads for the admin dashboard
+- Records an audit log of every locker access attempt
 
-#### Starting the service
+## Architecture
 
-Create the volumes workspace:
-
-```bash
-mkdir -p /home/debian/docker/volumes/keycloak/conf
-mkdir -p /home/debian/docker/volumes/keycloak/postgres_data
+```
+[Raspberry Pi / NFC] --> POST /auth/locker/{id}/check --> [FastAPI] --> [PostgreSQL]
+[Admin Dashboard]    --> API calls (admin JWT)        --> [FastAPI] --> [Keycloak Admin API]
+                                                                    --> [Keycloak]
 ```
 
-Get the Keycloak compose.yml and .env.example files:
+See [`docs/system-design.md`](docs/system-design.md) for the full architecture.
+
+---
+
+## Documentation
+
+| Document | Description |
+|---|---|
+| [`docs/deployment.md`](docs/deployment.md) | Full server deployment guide (SSH commands, step-by-step) |
+| [`docs/keycloak-test-guide.md`](docs/keycloak-test-guide.md) | Keycloak realm, clients, roles, and groups setup |
+| [`docs/api-reference.md`](docs/api-reference.md) | All API endpoints with request/response examples |
+| [`docs/guide-admin-dashboard.md`](docs/guide-admin-dashboard.md) | Frontend integration guide (admin dashboard) |
+| [`docs/guide-locker-client.md`](docs/guide-locker-client.md) | Raspberry Pi / NFC client integration guide |
+| [`docs/system-design.md`](docs/system-design.md) | System architecture, auth flows, data model |
+
+---
+
+## Quick Start (local development)
+
+### Prerequisites
+
+- Docker & Docker Compose
+- Git
+
+### Run locally
 
 ```bash
-mkdir -p /home/debian/docker/utilities/keycloak
-cd /home/debian/docker/utilities/keycloak
-wget https://raw.githubusercontent.com/Devinci-Fablab/SmartLock-Authentication-Authorization/main/docker/keycloak/compose.yml
-wget https://raw.githubusercontent.com/Devinci-Fablab/SmartLock-Authentication-Authorization/main/docker/keycloak/.env.example
-```
+git clone https://github.com/DeVinci-FabLab/SmartLock-Authentication-Authorization.git
+cd SmartLock-Authentication-Authorization/docker/database
 
-Move to the `docker/keycloak` folder and run:
-
-```bash
 cp .env.example .env
+# Edit .env — set POSTGRES_PASSWORD, KEYCLOAK_URL, secrets, etc.
+
+docker compose up smartlock-api-dev postgres -d
 ```
 
-Update the `.env` file and care to change these in particular:
+API available at `http://localhost:8000` — Swagger UI at `http://localhost:8000/docs`.
 
-- `POSTGRES_PASSWORD`: Set a strong password for the Keycloak database user (max 32 characters).
-- `KC_BOOTSTRAP_ADMIN_PASSWORD`: Set a strong password for the Keycloak temporary admin user.
+Database migrations run automatically on container start.
 
-Using openssl to generate strong passwords:
+---
 
-```bashbash
-openssl rand -base64 32
-```
+## Production Deployment
 
-Finally, make the file more private:
+See [`docs/deployment.md`](docs/deployment.md) for the complete step-by-step guide.
+
+Summary:
+1. Deploy Keycloak (`docker/keycloak/compose.yml`)
+2. Configure realm, clients, roles, groups — see [`docs/keycloak-test-guide.md`](docs/keycloak-test-guide.md)
+3. Deploy API + PostgreSQL (`docker/database/compose.yml`, production service)
+4. CD pipeline (`.github/workflows/CD.yml`) builds and pushes the image to GHCR on every push to `main`
+5. Watchtower handles automatic updates
+
+**Production URL:** `https://api.smartlock.devinci-fablab.fr`
+
+---
+
+## Environment Variables
+
+Copy `docker/database/.env.example` to `docker/database/.env` and fill in:
+
+| Variable | Description |
+|---|---|
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | PostgreSQL credentials |
+| `DATABASE_URL` | Full connection string (use the values above) |
+| `KEYCLOAK_URL` | Keycloak base URL (e.g. `https://auth.devinci-fablab.fr`) |
+| `KEYCLOAK_REALM` | Realm name |
+| `KEYCLOAK_CLIENT_SECRET` | Secret for `smartlock-api` client |
+| `LOCKER_CLIENT_SECRET` | Secret for `smartlock-lockers` service account |
+| `NFC_CLIENT_SECRET` | Secret for `nfc-scanner` service account |
+| `CORS_ORIGINS` | JSON array of allowed origins (e.g. `["https://dashboard.devinci-fablab.fr"]`) |
+| `VOLUMES_PATH` | Docker volume base path (default: `/home/debian/docker/volumes`) |
+
+---
+
+## Database Migrations
+
+Migrations run automatically on container start via `entrypoint.sh` (`alembic upgrade head`).
+
+To generate a new migration after changing SQLAlchemy models:
 
 ```bash
-sudo chmod 600 .env
+docker compose exec smartlock-api-dev uv run alembic revision --autogenerate -m "description"
 ```
 
-Then, run the following command to start Keycloak:
+To view migration history:
 
 ```bash
-docker-compose up -d
+docker compose exec smartlock-api-dev uv run alembic history
 ```
 
-Be sure to have on OVH a redirection from `auth.devinci-fablab.fr` to `193.70.33.226` so Traefik can route the traffic to the Keycloak container.
+---
 
-Access the Keycloak domain: `https://auth.devinci-fablab.fr`.
+## Security & Maintenance
 
-#### Configuration
+### Rate Limiting
 
-Login with the temporary admin user created during deployment `KC_BOOTSTRAP_ADMIN_USERNAME` and `KC_BOOTSTRAP_ADMIN_PASSWORD`.
+`slowapi` rate limits are applied per endpoint. Adjust limits via the `@limiter.limit(...)` decorators in `src/routes/`.
 
-Create a new admin user for regular use and delete the temporary one for security: Go to "Users" > "Add user", fill in the details, and then set a password for this user and give him all admin permissions. Sign out, sign in as the new admin user. Finally, delete the temporary admin user and set up 2FA for the new admin user.
+### Logging
 
-Go to Configure > Realm Settings > Login and set the following policies:
-
-- User registration: OFF
-- Forgot password: ON
-- Remember Me: ON
-
-- Verify email: ON
-
-Then go to Email and set up the email configuration to enable email verification and password reset features.
-
-Go to Localization and set the default locale to French (France) and enable internationalization support.
-
-Go to Sessions and set:
-
-- SSO Session Idle: 30 minutes
-- SSO Session Max: 10 hours
-- SSO Session Idle Remember Me: 1 day
-- SSO Session Max Remember Me: 30 days
-
-Go to user profile and add custom attribute:
-
-- `card_id`: ...
-
-Go to Configure > Authentication > Required actions and set:
-
-- Configure OTP: ON and default ON
-- Verify email: ON and default ON
-- Update password: ON and default ON
-
-TODO: Check user config (roles, groups, etc.) which groups to create (president, secretaire, tresorier, codir, coges, responsables, pole, membre, etc.)
-
-TODO: Create first client for SmartLock
-
-TODO: Create a Service Account for the API and generate credentials
-
-### API & Database
-
-#### Starting the service
-
-Create the workspace and fetch the files:
+All requests are traced by `src/utils/middleware_logger.py`. Logs are written by `loguru`.
 
 ```bash
-mkdir -p /home/debian/docker/utilities/database
-cd /home/debian/docker/utilities/database
-wget https://raw.githubusercontent.com/Devinci-Fablab/SmartLock-Authentication-Authorization/main/docker/database/compose.yml
-wget https://raw.githubusercontent.com/Devinci-Fablab/SmartLock-Authentication-Authorization/main/docker/database/.env.example
+docker compose logs smartlock-api --tail=100 -f
 ```
 
-Configure the environment:
+### Database Backup
 
 ```bash
-cp .env.example .env
+docker exec smartlock-postgres pg_dump -U <POSTGRES_USER> <POSTGRES_DB> > backup_$(date +%Y%m%d).sql
 ```
 
-Update the `.env` file:
+### Security hardening applied
 
-- `POSTGRES_PASSWORD`: Set a strong password for the PostgreSQL database user.
-- Configure Keycloak secrets (`KEYCLOAK_CLIENT_SECRET`, etc.).
-
-Start the API and database services:
-
-```bash
-docker compose up -d
-```
-
-The API will be accessible at `http://localhost:8000` (or your configured host).
-
-#### Database Migrations
-
-Once the services are running, apply the database schema:
-
-```bash
-docker compose exec api_app uv run alembic upgrade head
-```
-
-*(If you need to generate a new migration after updating SQLAlchemy models)*:
-
-```bash
-docker compose exec api_app uv run alembic revision --autogenerate -m "description"
-docker compose exec api_app uv run alembic upgrade head
-```
-
-View the migration history:
-
-```bash
-docker compose exec api_app uv run alembic history
-```
-
-Verify the API is running by accessing the docs endpoint:
-
-```
-http://localhost:8000/docs
-```
-
-Ensure the database connection is healthy and tables are created.
-
-### Security & Maintenance
-
-#### API Environment Variables & Authentication Setup
-
-To secure your API and connect it to Keycloak, ensure your `docker/database/.env` contains the correct values:
-
-- `KEYCLOAK_URL`: The public URL of your Keycloak instance (e.g., `https://auth.devinci-fablab.fr`).
-- `KEYCLOAK_REALM`: Your realm name (e.g., `fablab`).
-- `KEYCLOAK_CLIENT_ID`: The backend client ID (e.g., `smartlock-api`).
-- `KEYCLOAK_CLIENT_SECRET`: The confidential secret generated by Keycloak for this client.
-- `DATABASE_URL`: Connection string for PostgreSQL (e.g., `postgresql://user:password@db:5432/smartlock`).
-
-#### Rate Limiting and Throttling
-
-The API uses `slowapi` to prevent abuse, brute-force attacks, and badge spamming on the NFC endpoints.
-
-- Rate limits are applied per endpoint.
-- You can adjust the limits directly via the `@limiter.limit(".../minute")` decorators in the route files (e.g., `src/routes/auth.py`).
-- If a client exceeds the limit, the API will return a `429 Too Many Requests` HTTP response.
-
-#### Logging and Monitoring
-
-Logging is handled by `loguru` and a custom middleware (`src/utils/middleware_logger.py`), which traces every incoming request, processing time, and HTTP status code.
-
-- **View real-time API logs:**
-
-  ```bash
-  docker compose logs -f api_app
-  ```
-
-- **Database Monitoring:** SQLAlchemy handles connection pooling. Any FATAL DB errors or connection drops will be outputted in the API logs with full stack traces.
-
-#### Database Backup Strategy
-
-To safely backup the PostgreSQL database without stopping the container, you can run a `pg_dump` command from the host:
-
-```bash
-# Create a backup file
-docker compose exec -T your_db_service_name pg_dump -U your_db_user -F c your_db_name > backup_$(date +%Y%m%d).dump
-```
+- `security_opt: no-new-privileges:true` on all containers
+- CORS origins configurable via `CORS_ORIGINS` env var (no wildcard in production)
+- Traefik handles TLS termination
+- Watchtower auto-updates images from GHCR on new pushes to `main`

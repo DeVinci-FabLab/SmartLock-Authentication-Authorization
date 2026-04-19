@@ -137,62 +137,7 @@ Left menu → **Clients** → **Create client**
 
 ---
 
-## 6. Python Test Script
-
-The script lives at `sandbox/test_keycloak.py`.
-
-### Dependencies and .env file
-
-Install dependencies:
-
-```bash
-pip install httpx python-dotenv
-```
-
-Create `sandbox/.env`:
-
-```bash
-cd sandbox
-cp .env.example .env
-```
-
-The script tests two card IDs in sequence: one registered (should find alice) and one unknown (should return denied).
-
-### Run it
-
-```bash
-python test_keycloak.py
-```
-
-### Expected output
-
-```plain
-[1] Token obtenu (40 premiers caractères) : eyJhbGciOiJSUzI1NiIsInR5cCIgOi...
-
-──────────────────────────────────────────────────
-Recherche du card_id : 04:AB:CD:12:34:56:78
-──────────────────────────────────────────────────
-[2] Utilisateur trouvé : id=<uuid>  username=alice
-    card_id : ['04:AB:CD:12:34:56:78']
-[3] Rôles effectifs : ['default-roles-master', 'membre', 'membre-atelier']
-[4] Groupes : ['Adhérents/Atelier']
-
-── Résultat ────────────────────────────
-  Utilisateur : Alice  (alice)
-  Rôles       : ['default-roles-master', 'membre', 'membre-atelier']
-  Groupes     : ['Adhérents/Atelier']
-  Permissions (simulation casier 1) : {'can_open': True, 'can_view': True, 'can_take': True}
-
-──────────────────────────────────────────────────
-Recherche du card_id : FF:FF:FF:FF:FF:FF:FF
-──────────────────────────────────────────────────
-[2] Aucun utilisateur trouvé avec card_id=FF:FF:FF:FF:FF:FF:FF
-Résultat : carte non enregistrée — accès refusé
-```
-
----
-
-## 7. Common Errors
+## 6. Common Errors
 
 | Erreur                                        | Cause                                               | Correction                                                                    |
 | --------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------------- |

@@ -1,9 +1,10 @@
 services:
-  api_app:
-    container_name: smartlock-api  
-    build: 
+  # Development service — builds from source with live volume mount
+  smartlock-api-dev:
+    build:
       context: ../..
       dockerfile: docker/database/Dockerfile
+      target: dev
     restart: unless-stopped
     environment:
       - PYTHONPATH=/app
@@ -16,11 +17,34 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    networks:
+      - smartlock-internal
+
+  # Production service — pulls image built by CD pipeline
+  smartlock-api:
+    image: ghcr.io/devinci-fablab/smartlock-auth:latest
+    restart: unless-stopped
+    environment:
+      - PYTHONPATH=/app
+    env_file:
+      - .env
+    expose:
+      - 8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - smartlock-internal
+      - traefik-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.smartlock-auth.rule=Host(`api.smartlock.devinci-fablab.fr`)"
+      - "traefik.http.routers.smartlock-auth.entrypoints=websecure"
+      - "traefik.http.routers.smartlock-auth.tls.certresolver=myresolver"
+      - "traefik.http.services.smartlock-auth.loadbalancer.server.port=8000"
+      - "com.centurylinklabs.watchtower.enable=true"
 
   postgres:
     image: postgres:15
@@ -31,15 +55,19 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      - pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+      - ${VOLUMES_PATH}/smartlock_auth/postgres_data:/var/lib/postgresql/data
+    expose:
+      - 5432
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - smartlock-internal
 
-volumes:
-  pgdata:
-    driver: local
+networks:
+  smartlock-internal:
+    driver: bridge
+  traefik-network:
+    external: true

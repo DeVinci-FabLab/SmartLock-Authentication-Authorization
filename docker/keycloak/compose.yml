@@ -4,7 +4,7 @@ services:
     container_name: keycloak_web
     restart: unless-stopped
     volumes:
-      - ${DOCKER_VOLUMES_PATH}/keycloak/conf:/opt/keycloak/conf
+      - ${VOLUMES_PATH}/keycloak/conf:/opt/keycloak/conf
     environment:
       KC_DB: ${KC_DB}
       KC_DB_URL: ${KC_DB_URL}
@@ -49,11 +49,13 @@ services:
         reservations:
           memory: 512M
           cpus: '0.5'
+    security_opt:
+      - no-new-privileges:true
     expose:
       - 8080
     networks:
       - keycloak-internal
-      - traefik-network      
+      - traefik-network
     labels:
       traefik.enable: true
       traefik.docker.network: traefik-network
@@ -66,13 +68,14 @@ services:
       traefik.http.routers.keycloak-http.middlewares: redirect-to-https
       traefik.http.middlewares.redirect-to-https.redirectscheme.scheme: https
       traefik.http.services.keycloak.loadbalancer.server.port: 8080
+      com.centurylinklabs.watchtower.enable: "true"
 
   keycloakdb:
     image: postgres:15
     container_name: keycloakdb
     restart: unless-stopped
     volumes:
-      - ${DOCKER_VOLUMES_PATH}/keycloak/postgres_data:/var/lib/postgresql/data
+      - ${VOLUMES_PATH}/keycloak/postgres_data:/var/lib/postgresql/data
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}

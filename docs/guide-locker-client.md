@@ -20,9 +20,9 @@ Le module NFC (borne d'accueil) utilise un autre service account (`nfc-scanner`)
 Variables d'environnement necessaires sur le Raspberry Pi :
 
 ```env
-API_URL=http://<serveur>:8000
+API_URL=https://api.smartlock.devinci-fablab.fr
 KEYCLOAK_URL=https://auth.devinci-fablab.fr
-KEYCLOAK_REALM=master
+KEYCLOAK_REALM=<your-realm-name>
 LOCKER_CLIENT_SECRET=<secret du client smartlock-lockers>
 LOCKER_ID=1
 ```
@@ -146,7 +146,7 @@ else:
 import asyncio
 import httpx
 
-API_URL = "http://192.168.1.100:8000"
+API_URL = "https://api.smartlock.devinci-fablab.fr"
 LOCKER_ID = 1
 
 async def main():
