@@ -1,5 +1,3 @@
-from typing import List
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -16,7 +14,7 @@ router = APIRouter(prefix="/stock", tags=["Stock"])
 
 @router.get(
     "/",
-    response_model=List[StockResponse],
+    response_model=list[StockResponse],
     dependencies=[Depends(validate_jwt)],
 )
 def read_stocks(
@@ -123,7 +121,7 @@ def update_stock(
     response_model=StockResponse,
     dependencies=[Depends(require_admin)],
 )
-def delete_stock_endpoint(stock_id: int, db: Session = Depends(get_db)):
+def delete_stock(stock_id: int, db: Session = Depends(get_db)):
     """Delete a stock entry."""
     logger.info(f"DELETE /stock/{stock_id} called")
 

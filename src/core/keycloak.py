@@ -121,8 +121,8 @@ async def require_locker_client(
     Vérifie que le token appartient au client smartlock-lockers (les casiers physiques).
     """
     azp = payload.get("azp", "")
-    if azp != "smartlock-lockers":
-        logger.warning(f"Accès refusé — azp={azp} != smartlock-lockers")
+    if azp != LOCKER_CLIENT_ID:
+        logger.warning(f"Accès refusé — azp={azp} != {LOCKER_CLIENT_ID}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Accès réservé aux terminaux physiques (casiers)",

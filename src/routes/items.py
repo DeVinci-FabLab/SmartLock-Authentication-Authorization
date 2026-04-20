@@ -1,5 +1,3 @@
-from typing import List
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -15,7 +13,7 @@ router = APIRouter(prefix="/items", tags=["Items"])
 
 @router.get(
     "/",
-    response_model=List[ItemResponse],
+    response_model=list[ItemResponse],
     dependencies=[Depends(validate_jwt)],
 )
 def read_items(
@@ -118,7 +116,7 @@ def update_item(
     response_model=ItemResponse,
     dependencies=[Depends(require_admin)],
 )
-def delete_item_endpoint(item_id: int, db: Session = Depends(get_db)):
+def delete_item(item_id: int, db: Session = Depends(get_db)):
     """Delete an item."""
     logger.info(f"DELETE /items/{item_id} called")
 

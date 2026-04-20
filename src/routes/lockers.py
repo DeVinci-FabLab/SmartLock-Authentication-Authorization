@@ -1,5 +1,3 @@
-from typing import List
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -15,7 +13,7 @@ router = APIRouter(prefix="/lockers", tags=["Lockers"])
 
 @router.get(
     "/",
-    response_model=List[LockerResponse],
+    response_model=list[LockerResponse],
     dependencies=[Depends(validate_jwt)],
 )
 def read_lockers(
@@ -63,10 +61,10 @@ def read_locker(locker_id: int, db: Session = Depends(get_db)):
 
 @router.get(
     "/{locker_id}/stock",
-    response_model=List[StockResponse],
+    response_model=list[StockResponse],
     dependencies=[Depends(validate_jwt)],
 )
-def get_locker_stock_endpoint(locker_id: int, db: Session = Depends(get_db)):
+def get_locker_stock(locker_id: int, db: Session = Depends(get_db)):
     """Retrieve all stock items in a specific locker."""
     logger.debug(f"GET /lockers/{locker_id}/stock called")
 
@@ -145,7 +143,7 @@ def update_locker(
     response_model=LockerResponse,
     dependencies=[Depends(require_admin)],
 )
-def delete_locker_endpoint(locker_id: int, db: Session = Depends(get_db)):
+def delete_locker(locker_id: int, db: Session = Depends(get_db)):
     """Delete a locker."""
     logger.info(f"DELETE /lockers/{locker_id} called")
 

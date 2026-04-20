@@ -1,5 +1,3 @@
-from typing import List
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -23,7 +21,7 @@ router = APIRouter(prefix="/badge", tags=["Badge"])
 @router.post(
     "/scan",
     response_model=ScanCardResponse,
-    status_code=status.HTTP_201_CREATED,
+    status_code=201,
     summary="Enregistrer un scan de carte NFC",
 )
 async def scan_card(
@@ -80,7 +78,7 @@ async def scan_card(
 # -------------------------------------------------------------------
 @router.get(
     "/pending",
-    response_model=List[PendingCardResponse],
+    response_model=list[PendingCardResponse],
     summary="Lister les cartes en attente d'assignation",
 )
 async def get_pending_cards(

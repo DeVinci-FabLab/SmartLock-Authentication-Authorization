@@ -1,4 +1,3 @@
-import json
 import sys
 from contextvars import ContextVar
 from pathlib import Path
@@ -36,32 +35,8 @@ def file_formatter(record: dict) -> str:
     )
 
 
-def serialize_record(record: dict) -> str:
-    """JSON formatter for structured logging"""
-    subset = {
-        "timestamp": record["time"].timestamp(),
-        "level": record["level"].name,
-        "message": record["message"],
-        "module": record["name"],
-        "function": record["function"],
-        "line": record["line"],
-    }
-
-    if record["extra"]:
-        subset["extra"] = record["extra"]
-
-    if record["exception"]:
-        subset["exception"] = {
-            "type": record["exception"].type.__name__,
-            "value": str(record["exception"].value),
-        }
-
-    return json.dumps(subset)
-
-
 def setup_logger(
     level: str = LogConfig.LEVEL,
-    json_logs: bool = False,
     log_to_file: bool = True,
 ):
     """Configure Loguru logger"""
@@ -110,28 +85,8 @@ def setup_logger(
             diagnose=True,
         )
 
-        # JSON log file
-        if json_logs:
-            logger.add(
-                LOGS_DIR / "app.json",
-                format=serialize_record,
-                level=level,
-                rotation=LogConfig.ROTATION,
-                retention=LogConfig.RETENTION,
-                compression=LogConfig.COMPRESSION,
-                enqueue=True,
-                serialize=True,
-            )
-
-    return logger
-
-
-def get_logger(name: str = None):
-    """Get logger instance"""
-    if name:
-        return logger.bind(name=name)
     return logger
 
 
 # Export
-__all__ = ["logger", "setup_logger", "get_logger", "request_id_var"]
+__all__ = ["logger", "setup_logger", "request_id_var"]
