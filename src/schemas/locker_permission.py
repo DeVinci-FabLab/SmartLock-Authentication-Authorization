@@ -22,9 +22,8 @@ class LockerPermissionBase(BaseModel):
 
     can_view: bool = Field(default=True, description="Can view locker")
     can_open: bool = Field(default=False, description="Can open locker")
-    can_edit: bool = Field(default=False, description="Can edit locker")
-    can_take: bool = Field(default=False, description="Can take items")
-    can_manage: bool = Field(default=False, description="Can manage locker")
+    can_edit: bool = Field(default=False, description="Can edit catalogue")
+    can_manage: bool = Field(default=False, description="Can manage locker ACL")
     valid_until: Optional[str] = Field(None, description="Expiration date (ISO format)")
     locker_id: int = Field(..., gt=0, description="Locker ID")
 
@@ -54,7 +53,6 @@ class LockerPermissionUpdate(BaseModel):
     can_view: Optional[bool] = None
     can_open: Optional[bool] = None
     can_edit: Optional[bool] = None
-    can_take: Optional[bool] = None
     can_manage: Optional[bool] = None
     valid_until: Optional[str] = None
     locker_id: Optional[int] = Field(None, gt=0)

@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from src.core.keycloak import ROLE_ADMIN, require_admin, require_codir, require_locker_client
+from src.utils.card_hash import hash_card_id
 from src.core.keycloak_admin import (
     add_role_to_user,
     find_user_by_card_id,
@@ -63,7 +64,7 @@ async def check_locker_access(
     Verifie l'identite du badge via Keycloak, calcule les permissions,
     enregistre l'historique d'acces et renvoie la decision d'ouverture.
     """
-    card_id = request.card_id
+    card_id = hash_card_id(request.card_id)
     logger.info(
         f"Demande d'acces au casier {locker_id} avec la carte {card_id}"
     )
@@ -149,7 +150,6 @@ async def check_locker_access(
         "can_view": False,
         "can_open": False,
         "can_edit": False,
-        "can_take": False,
         "can_manage": False,
     }
     has_permission_row = False
@@ -164,7 +164,6 @@ async def check_locker_access(
             granted["can_view"] |= perm.can_view
             granted["can_open"] |= perm.can_open
             granted["can_edit"] |= perm.can_edit
-            granted["can_take"] |= perm.can_take
             granted["can_manage"] |= perm.can_manage
 
     # 5. Surcharge user-specific (ecrase les permissions role)
@@ -183,7 +182,6 @@ async def check_locker_access(
             "can_view": user_perm.can_view,
             "can_open": user_perm.can_open,
             "can_edit": user_perm.can_edit,
-            "can_take": user_perm.can_take,
             "can_manage": user_perm.can_manage,
         }
 

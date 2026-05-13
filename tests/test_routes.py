@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 from src.routes.auth import _is_expired  # noqa: E402
+from src.utils.card_hash import hash_card_id  # noqa: E402
 
 
 # ===========================================================================
@@ -246,7 +247,7 @@ class TestLockerAccessCheck:
                 f"/auth/locker/{self.LOCKER_ID}/check",
                 json={"card_id": "GHOST_CARD"},
             )
-        logs = db.query(AccessLog).filter(AccessLog.card_id == "GHOST_CARD").all()
+        logs = db.query(AccessLog).filter(AccessLog.card_id == hash_card_id("GHOST_CARD")).all()
         assert len(logs) == 1
         assert logs[0].result == "denied"
         assert logs[0].reason == "card_not_registered"
@@ -491,7 +492,7 @@ class TestLockerAccessCheck:
                 f"/auth/locker/{self.LOCKER_ID}/check",
                 json={"card_id": "LOG_CARD"},
             )
-        logs = db.query(AccessLog).filter(AccessLog.card_id == "LOG_CARD").all()
+        logs = db.query(AccessLog).filter(AccessLog.card_id == hash_card_id("LOG_CARD")).all()
         assert len(logs) == 1
         assert logs[0].result == "allowed"
         assert logs[0].user_id == "user-log"
@@ -510,7 +511,7 @@ class TestLockerAccessCheck:
                 f"/auth/locker/{self.LOCKER_ID}/check",
                 json={"card_id": "BOB_CARD_DENIED"},
             )
-        logs = db.query(AccessLog).filter(AccessLog.card_id == "BOB_CARD_DENIED").all()
+        logs = db.query(AccessLog).filter(AccessLog.card_id == hash_card_id("BOB_CARD_DENIED")).all()
         assert len(logs) == 1
         assert logs[0].result == "denied"
 

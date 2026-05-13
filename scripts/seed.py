@@ -114,7 +114,6 @@ def upsert_permission(
     can_view=False,
     can_open=False,
     can_edit=False,
-    can_take=False,
     can_manage=False,
 ):
     row = db.execute(
@@ -133,20 +132,20 @@ def upsert_permission(
         text(
             "INSERT INTO locker_permissions"
             " (locker_id, subject_type, role_name, user_id,"
-            "  can_view, can_open, can_edit, can_take, can_manage)"
-            " VALUES (:l, :st, :rn, :ui, :cv, :co, :ce, :ct, :cm)"
+            "  can_view, can_open, can_edit, can_manage)"
+            " VALUES (:l, :st, :rn, :ui, :cv, :co, :ce, :cm)"
             " RETURNING id"
         ),
         {
             "l": locker_id, "st": subject_type, "rn": role_name, "ui": user_id,
-            "cv": can_view, "co": can_open, "ce": can_edit, "ct": can_take, "cm": can_manage,
+            "cv": can_view, "co": can_open, "ce": can_edit, "cm": can_manage,
         },
     )
     db.commit()
     pid = result.fetchone()[0]
     print(
         f"  [ok]   permission locker={locker_id} '{target}'"
-        f" view={can_view} open={can_open} edit={can_edit} take={can_take} manage={can_manage}"
+        f" view={can_view} open={can_open} edit={can_edit} manage={can_manage}"
         f" (id={pid})"
     )
     return pid
@@ -201,50 +200,48 @@ def seed():
         upsert_stock(db, i_pap,  l_bureau, 5)
 
         # ── Locker Permissions ────────────────────────────────────────────────
-        # Mapping:
-        #   can_view   = "Consulter les stocks"
-        #   can_open   = required to take or deposit (set when can_take or can_edit)
-        #   can_edit   = "Mettre à jour l'inventaire" + "Déposer des items"
-        #   can_take   = "Prendre des items"
-        #   can_manage = "Créer/Supprimer un type d'item"
+        # can_view   = consulter les stocks
+        # can_open   = ouvrir l'armoire + déclarer prise/dépôt
+        # can_edit   = modifier le catalogue (types d'items)
+        # can_manage = gérer les ACL de ce locker
 
         print("\n=== Locker Permissions ===")
 
         # Armoire 3D
         print("\n-- Armoire 3D --")
         upsert_permission(db, l_3d, "role", "membre",       None, can_view=True)
-        upsert_permission(db, l_3d, "role", "3d",           None, can_view=True, can_open=True, can_edit=True, can_take=True)
+        upsert_permission(db, l_3d, "role", "3d",           None, can_view=True, can_open=True)
         upsert_permission(db, l_3d, "role", "electronique", None, can_view=True)
         upsert_permission(db, l_3d, "role", "textile",      None, can_view=True)
-        upsert_permission(db, l_3d, "role", "materialiste", None, can_view=True, can_open=True, can_edit=True, can_take=True, can_manage=True)
-        upsert_permission(db, l_3d, "role", "codir",        None, can_view=True, can_open=True, can_edit=True, can_take=True, can_manage=True)
-        upsert_permission(db, l_3d, "role", "admin",        None, can_view=True, can_open=True, can_edit=True, can_take=True, can_manage=True)
+        upsert_permission(db, l_3d, "role", "materialiste", None, can_view=True, can_open=True, can_edit=True, can_manage=True)
+        upsert_permission(db, l_3d, "role", "codir",        None, can_view=True, can_open=True, can_edit=True, can_manage=True)
+        upsert_permission(db, l_3d, "role", "admin",        None, can_view=True, can_open=True, can_edit=True, can_manage=True)
 
         # Armoire Electronique
         print("\n-- Armoire Electronique --")
         upsert_permission(db, l_elec, "role", "membre",       None, can_view=True)
         upsert_permission(db, l_elec, "role", "3d",           None, can_view=True)
-        upsert_permission(db, l_elec, "role", "electronique", None, can_view=True, can_open=True, can_edit=True, can_take=True)
+        upsert_permission(db, l_elec, "role", "electronique", None, can_view=True, can_open=True)
         upsert_permission(db, l_elec, "role", "textile",      None, can_view=True)
-        upsert_permission(db, l_elec, "role", "materialiste", None, can_view=True, can_open=True, can_edit=True, can_take=True, can_manage=True)
-        upsert_permission(db, l_elec, "role", "codir",        None, can_view=True, can_open=True, can_edit=True, can_take=True, can_manage=True)
-        upsert_permission(db, l_elec, "role", "admin",        None, can_view=True, can_open=True, can_edit=True, can_take=True, can_manage=True)
+        upsert_permission(db, l_elec, "role", "materialiste", None, can_view=True, can_open=True, can_edit=True, can_manage=True)
+        upsert_permission(db, l_elec, "role", "codir",        None, can_view=True, can_open=True, can_edit=True, can_manage=True)
+        upsert_permission(db, l_elec, "role", "admin",        None, can_view=True, can_open=True, can_edit=True, can_manage=True)
 
         # Armoire Textile
         print("\n-- Armoire Textile --")
         upsert_permission(db, l_text, "role", "membre",       None, can_view=True)
         upsert_permission(db, l_text, "role", "3d",           None, can_view=True)
         upsert_permission(db, l_text, "role", "electronique", None, can_view=True)
-        upsert_permission(db, l_text, "role", "textile",      None, can_view=True, can_open=True, can_edit=True, can_take=True)
-        upsert_permission(db, l_text, "role", "materialiste", None, can_view=True, can_open=True, can_edit=True, can_take=True, can_manage=True)
-        upsert_permission(db, l_text, "role", "codir",        None, can_view=True, can_open=True, can_edit=True, can_take=True, can_manage=True)
-        upsert_permission(db, l_text, "role", "admin",        None, can_view=True, can_open=True, can_edit=True, can_take=True, can_manage=True)
+        upsert_permission(db, l_text, "role", "textile",      None, can_view=True, can_open=True)
+        upsert_permission(db, l_text, "role", "materialiste", None, can_view=True, can_open=True, can_edit=True, can_manage=True)
+        upsert_permission(db, l_text, "role", "codir",        None, can_view=True, can_open=True, can_edit=True, can_manage=True)
+        upsert_permission(db, l_text, "role", "admin",        None, can_view=True, can_open=True, can_edit=True, can_manage=True)
 
         # Armoire Bureau
         print("\n-- Armoire Bureau --")
-        upsert_permission(db, l_bureau, "role", "materialiste", None, can_view=True, can_open=True, can_edit=True, can_take=True, can_manage=True)
-        upsert_permission(db, l_bureau, "role", "codir",        None, can_view=True, can_open=True, can_edit=True, can_take=True, can_manage=True)
-        upsert_permission(db, l_bureau, "role", "admin",        None, can_view=True, can_open=True, can_edit=True, can_take=True, can_manage=True)
+        upsert_permission(db, l_bureau, "role", "materialiste", None, can_view=True, can_open=True, can_edit=True, can_manage=True)
+        upsert_permission(db, l_bureau, "role", "codir",        None, can_view=True, can_open=True, can_edit=True, can_manage=True)
+        upsert_permission(db, l_bureau, "role", "admin",        None, can_view=True, can_open=True, can_edit=True, can_manage=True)
 
         print("\n✅ Seed complete.\n")
 

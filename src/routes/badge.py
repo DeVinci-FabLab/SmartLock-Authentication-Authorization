@@ -10,6 +10,7 @@ from src.schemas.pending_card import (
     ScanCardRequest,
     ScanCardResponse,
 )
+from src.utils.card_hash import hash_card_id
 from src.utils.logger import logger
 
 router = APIRouter(prefix="/badge", tags=["Badge"])
@@ -33,33 +34,34 @@ async def scan_card(
     Reçoit un card_id scanné par le module NFC et le stocke en DB.
     Protégé par le service account nfc-scanner (client_credentials).
     """
-    logger.info(f"Scan reçu : card_id={body.card_id}")
+    card_hash = hash_card_id(body.card_id)
+    logger.info(f"Scan reçu : card_id={card_hash}")
 
     try:
         # Vérifier si la carte existe déjà
         existing = (
-            db.query(PendingCard).filter(PendingCard.card_id == body.card_id).first()
+            db.query(PendingCard).filter(PendingCard.card_id == card_hash).first()
         )
 
         if existing:
             logger.warning(
-                f"card_id={body.card_id} déjà enregistré (status={existing.status})"
+                f"card_id={card_hash} déjà enregistré (status={existing.status})"
             )
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Cette carte est déjà enregistrée (status: {existing.status})",
             )
 
-        card = PendingCard(card_id=body.card_id)
+        card = PendingCard(card_id=card_hash)
         db.add(card)
         db.commit()
         db.refresh(card)
 
-        logger.success(f"card_id={body.card_id} enregistré avec succès")
+        logger.success(f"card_id={card_hash} enregistré avec succès")
         return ScanCardResponse(
             success=True,
             message="Carte enregistrée, en attente d'assignation par un admin",
-            card_id=body.card_id,
+            card_id=card_hash,
         )
 
     except HTTPException:

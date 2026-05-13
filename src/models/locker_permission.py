@@ -32,7 +32,6 @@ class Locker_Permission(Base):
     can_view = Column(Boolean, default=True)
     can_open = Column(Boolean, default=False)
     can_edit = Column(Boolean, default=False)
-    can_take = Column(Boolean, default=False)
     can_manage = Column(Boolean, default=False)
 
     # --- Métadonnées ---
