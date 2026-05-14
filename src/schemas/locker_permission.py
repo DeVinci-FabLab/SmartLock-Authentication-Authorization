@@ -1,67 +1,45 @@
-from datetime import datetime
 from typing import Optional
+from pydantic import BaseModel, ConfigDict, field_validator
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+PERMISSION_LEVELS = ("can_view", "can_open", "can_edit")
 
 
 class LockerPermissionBase(BaseModel):
-    """Base schema for Locker Permission with common fields"""
+    role_name: str
+    permission_level: str
+    valid_until: Optional[str] = None
+    locker_id: int
 
-    subject_type: str = Field(
-        default="role", description="Type of target: 'role' or 'user'"
-    )
-    role_name: Optional[str] = Field(
-        None,
-        min_length=1,
-        max_length=100,
-        description="Role name (if subject_type is 'role')",
-    )
-    user_id: Optional[str] = Field(
-        None, description="Keycloak User UUID (if subject_type is 'user')"
-    )
-
-    can_view: bool = Field(default=True, description="Can view locker")
-    can_open: bool = Field(default=False, description="Can open locker")
-    can_edit: bool = Field(default=False, description="Can edit catalogue")
-    can_manage: bool = Field(default=False, description="Can manage locker ACL")
-    valid_until: Optional[str] = Field(None, description="Expiration date (ISO format)")
-    locker_id: int = Field(..., gt=0, description="Locker ID")
-
-    @model_validator(mode="after")
-    def check_subject_target(self) -> "LockerPermissionBase":
-        if self.subject_type == "role" and not self.role_name:
-            raise ValueError("role_name is required when subject_type is 'role'")
-        if self.subject_type == "user" and not self.user_id:
-            raise ValueError("user_id is required when subject_type is 'user'")
-        return self
+    @field_validator("permission_level")
+    @classmethod
+    def level_valid(cls, v: str) -> str:
+        if v not in PERMISSION_LEVELS:
+            raise ValueError(f"permission_level must be one of {PERMISSION_LEVELS}")
+        return v
 
 
 class LockerPermissionCreate(LockerPermissionBase):
-    """Schema for creating a new locker permission"""
-
     pass
 
 
 class LockerPermissionUpdate(BaseModel):
-    """Schema for updating locker permission (all fields optional)"""
-
-    subject_type: Optional[str] = Field(
-        None, description="Type of target: 'role' or 'user'"
-    )
-    role_name: Optional[str] = Field(None, min_length=1, max_length=100)
-    user_id: Optional[str] = Field(None)
-    can_view: Optional[bool] = None
-    can_open: Optional[bool] = None
-    can_edit: Optional[bool] = None
-    can_manage: Optional[bool] = None
+    permission_level: Optional[str] = None
     valid_until: Optional[str] = None
-    locker_id: Optional[int] = Field(None, gt=0)
+
+    @field_validator("permission_level")
+    @classmethod
+    def level_valid(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in PERMISSION_LEVELS:
+            raise ValueError(f"permission_level must be one of {PERMISSION_LEVELS}")
+        return v
 
 
-class LockerPermissionResponse(LockerPermissionBase):
-    """Schema for locker permission response"""
+class LockerPermissionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
-    created_at: Optional[datetime] = None
-
-    model_config = ConfigDict(from_attributes=True)
+    locker_id: int
+    role_name: str
+    permission_level: str
+    valid_until: Optional[str] = None
+    created_at: Optional[str] = None

@@ -13,7 +13,6 @@ from src.schemas.locker_permission import (
     LockerPermissionUpdate,
 )
 
-# On applique require_admin à l'ensemble du routeur !
 router = APIRouter(
     prefix="/lockers",
     tags=["Locker Permissions"],

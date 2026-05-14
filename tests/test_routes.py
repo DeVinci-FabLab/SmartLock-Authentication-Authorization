@@ -113,52 +113,6 @@ class TestRequireCodirOrAdmin:
         assert resp.status_code == 403
 
 
-class TestRequireMaterialisteOrAbove:
-    """POST /users/{id}/roles/{role} requires require_materialiste_or_above."""
-
-    def test_materialiste_allowed(self, materialiste_client):
-        with patch("src.routes.roles.add_role_to_user", new_callable=AsyncMock) as m:
-            m.return_value = None
-            resp = materialiste_client.post("/users/any-user/roles/membre")
-        assert resp.status_code == 204
-
-    def test_codir_allowed(self, codir_client):
-        with patch("src.routes.roles.add_role_to_user", new_callable=AsyncMock) as m:
-            m.return_value = None
-            resp = codir_client.post("/users/any-user/roles/membre")
-        assert resp.status_code == 204
-
-    def test_admin_allowed(self, admin_client):
-        with patch("src.routes.roles.add_role_to_user", new_callable=AsyncMock) as m:
-            m.return_value = None
-            resp = admin_client.post("/users/any-user/roles/membre")
-        assert resp.status_code == 204
-
-    def test_membre_denied(self, membre_client):
-        resp = membre_client.post("/users/any-user/roles/membre")
-        assert resp.status_code == 403
-
-
-class TestRequireCodir:
-    """POST /auth/elevate requires require_codir."""
-
-    def test_codir_allowed(self, codir_client):
-        with patch("src.routes.auth.add_role_to_user", new_callable=AsyncMock) as m:
-            m.return_value = None
-            resp = codir_client.post("/auth/elevate")
-        assert resp.status_code == 200
-
-    def test_admin_only_denied(self, admin_client):
-        # admin_client has "admin" but NOT "codir" — require_codir must block it
-        # NOTE: admin_client fixture does NOT override require_codir
-        resp = admin_client.post("/auth/elevate")
-        assert resp.status_code == 403
-
-    def test_membre_denied(self, membre_client):
-        resp = membre_client.post("/auth/elevate")
-        assert resp.status_code == 403
-
-
 class TestRequireNfcScanner:
     """POST /badge/scan requires require_nfc_scanner."""
 
@@ -197,24 +151,12 @@ class TestRequireLockerClient:
 from src.models.locker_permission import Locker_Permission  # noqa: E402
 
 
-def _make_locker_permission(
-    db,
-    locker_id,
-    subject_type="role",
-    role_name=None,
-    user_id=None,
-    can_open=False,
-    can_view=True,
-    valid_until=None,
-):
+def _make_locker_permission(db, locker_id, role_name, permission_level="can_view", valid_until=None):
     """Insert a Locker_Permission row into the test DB and return it."""
     perm = Locker_Permission(
         locker_id=locker_id,
-        subject_type=subject_type,
         role_name=role_name,
-        user_id=user_id,
-        can_open=can_open,
-        can_view=can_view,
+        permission_level=permission_level,
         valid_until=valid_until,
     )
     db.add(perm)
@@ -269,7 +211,7 @@ class TestLockerAccessCheck:
         ) as fu, patch(
             "src.routes.auth.get_user_effective_roles", new_callable=AsyncMock
         ) as gr:
-            fu.return_value = {"id": "user-1", "firstName": "Bob", "lastName": ""}
+            fu.return_value = {"id": "user-1", "firstName": "Bob", "lastName": "", "enabled": True}
             gr.side_effect = RuntimeError("roles unavailable")
             resp = rpi_client.post(
                 f"/auth/locker/{self.LOCKER_ID}/check",
@@ -285,7 +227,7 @@ class TestLockerAccessCheck:
         ) as fu, patch(
             "src.routes.auth.get_user_effective_roles", new_callable=AsyncMock
         ) as gr:
-            fu.return_value = {"id": "user-1", "firstName": "Alice", "lastName": "D"}
+            fu.return_value = {"id": "user-1", "firstName": "Alice", "lastName": "D", "enabled": True}
             gr.return_value = ["admin", "membre"]
             resp = rpi_client.post(
                 f"/auth/locker/{self.LOCKER_ID}/check",
@@ -296,13 +238,13 @@ class TestLockerAccessCheck:
         assert resp.json()["reason"] == "no_permission"
 
     def test_role_permission_can_open_false_denied(self, rpi_client, db):
-        _make_locker_permission(db, self.LOCKER_ID, role_name="admin", can_open=False)
+        _make_locker_permission(db, self.LOCKER_ID, role_name="admin", permission_level="can_view")
         with patch(
             "src.routes.auth.find_user_by_card_id", new_callable=AsyncMock
         ) as fu, patch(
             "src.routes.auth.get_user_effective_roles", new_callable=AsyncMock
         ) as gr:
-            fu.return_value = {"id": "user-1", "firstName": "Alice", "lastName": "D"}
+            fu.return_value = {"id": "user-1", "firstName": "Alice", "lastName": "D", "enabled": True}
             gr.return_value = ["admin"]
             resp = rpi_client.post(
                 f"/auth/locker/{self.LOCKER_ID}/check",
@@ -312,13 +254,13 @@ class TestLockerAccessCheck:
         assert resp.json()["allowed"] is False
 
     def test_role_permission_can_open_true_allowed(self, rpi_client, db):
-        _make_locker_permission(db, self.LOCKER_ID, role_name="admin", can_open=True)
+        _make_locker_permission(db, self.LOCKER_ID, role_name="admin", permission_level="can_open")
         with patch(
             "src.routes.auth.find_user_by_card_id", new_callable=AsyncMock
         ) as fu, patch(
             "src.routes.auth.get_user_effective_roles", new_callable=AsyncMock
         ) as gr:
-            fu.return_value = {"id": "user-1", "firstName": "Alice", "lastName": "D"}
+            fu.return_value = {"id": "user-1", "firstName": "Alice", "lastName": "D", "enabled": True}
             gr.return_value = ["admin"]
             resp = rpi_client.post(
                 f"/auth/locker/{self.LOCKER_ID}/check",
@@ -329,15 +271,15 @@ class TestLockerAccessCheck:
         assert resp.json()["display_name"] == "Alice D"
 
     def test_multiple_role_permissions_are_ored(self, rpi_client, db):
-        # "membre" has can_open=False, "admin" has can_open=True → OR → allowed
-        _make_locker_permission(db, self.LOCKER_ID, role_name="membre", can_open=False)
-        _make_locker_permission(db, self.LOCKER_ID, role_name="admin", can_open=True)
+        # "membre" has can_view, "admin" has can_open → MAX is can_open → allowed
+        _make_locker_permission(db, self.LOCKER_ID, role_name="membre", permission_level="can_view")
+        _make_locker_permission(db, self.LOCKER_ID, role_name="admin", permission_level="can_open")
         with patch(
             "src.routes.auth.find_user_by_card_id", new_callable=AsyncMock
         ) as fu, patch(
             "src.routes.auth.get_user_effective_roles", new_callable=AsyncMock
         ) as gr:
-            fu.return_value = {"id": "user-1", "username": "alice"}
+            fu.return_value = {"id": "user-1", "username": "alice", "enabled": True}
             gr.return_value = ["admin", "membre"]
             resp = rpi_client.post(
                 f"/auth/locker/{self.LOCKER_ID}/check",
@@ -348,14 +290,14 @@ class TestLockerAccessCheck:
     def test_expired_role_permission_is_skipped(self, rpi_client, db):
         past = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
         _make_locker_permission(
-            db, self.LOCKER_ID, role_name="admin", can_open=True, valid_until=past
+            db, self.LOCKER_ID, role_name="admin", permission_level="can_open", valid_until=past
         )
         with patch(
             "src.routes.auth.find_user_by_card_id", new_callable=AsyncMock
         ) as fu, patch(
             "src.routes.auth.get_user_effective_roles", new_callable=AsyncMock
         ) as gr:
-            fu.return_value = {"id": "user-1", "username": "alice"}
+            fu.return_value = {"id": "user-1", "username": "alice", "enabled": True}
             gr.return_value = ["admin"]
             resp = rpi_client.post(
                 f"/auth/locker/{self.LOCKER_ID}/check",
@@ -364,77 +306,14 @@ class TestLockerAccessCheck:
         assert resp.json()["allowed"] is False
         assert resp.json()["reason"] == "no_permission"
 
-    def test_user_permission_overrides_role_permission(self, rpi_client, db):
-        # Role says can_open=False, user-specific says can_open=True
-        _make_locker_permission(db, self.LOCKER_ID, role_name="admin", can_open=False)
-        _make_locker_permission(
-            db, self.LOCKER_ID, subject_type="user", user_id="user-1", can_open=True
-        )
-        with patch(
-            "src.routes.auth.find_user_by_card_id", new_callable=AsyncMock
-        ) as fu, patch(
-            "src.routes.auth.get_user_effective_roles", new_callable=AsyncMock
-        ) as gr:
-            fu.return_value = {"id": "user-1", "username": "alice"}
-            gr.return_value = ["admin"]
-            resp = rpi_client.post(
-                f"/auth/locker/{self.LOCKER_ID}/check",
-                json={"card_id": "ALICE_CARD"},
-            )
-        assert resp.json()["allowed"] is True
-
-    def test_user_permission_can_deny_despite_open_role(self, rpi_client, db):
-        # Role says can_open=True, user-specific says can_open=False → denied
-        _make_locker_permission(db, self.LOCKER_ID, role_name="admin", can_open=True)
-        _make_locker_permission(
-            db, self.LOCKER_ID, subject_type="user", user_id="user-1", can_open=False
-        )
-        with patch(
-            "src.routes.auth.find_user_by_card_id", new_callable=AsyncMock
-        ) as fu, patch(
-            "src.routes.auth.get_user_effective_roles", new_callable=AsyncMock
-        ) as gr:
-            fu.return_value = {"id": "user-1", "username": "alice"}
-            gr.return_value = ["admin"]
-            resp = rpi_client.post(
-                f"/auth/locker/{self.LOCKER_ID}/check",
-                json={"card_id": "ALICE_CARD"},
-            )
-        assert resp.json()["allowed"] is False
-
-    def test_expired_user_perm_falls_back_to_role(self, rpi_client, db):
-        # User perm is expired — role perm is active with can_open=True → allowed
-        past = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
-        _make_locker_permission(db, self.LOCKER_ID, role_name="admin", can_open=True)
-        _make_locker_permission(
-            db,
-            self.LOCKER_ID,
-            subject_type="user",
-            user_id="user-1",
-            can_open=False,
-            valid_until=past,
-        )
-        with patch(
-            "src.routes.auth.find_user_by_card_id", new_callable=AsyncMock
-        ) as fu, patch(
-            "src.routes.auth.get_user_effective_roles", new_callable=AsyncMock
-        ) as gr:
-            fu.return_value = {"id": "user-1", "username": "alice"}
-            gr.return_value = ["admin"]
-            resp = rpi_client.post(
-                f"/auth/locker/{self.LOCKER_ID}/check",
-                json={"card_id": "ALICE_CARD"},
-            )
-        assert resp.json()["allowed"] is True
-
     def test_display_name_from_first_and_last(self, rpi_client, db):
-        _make_locker_permission(db, self.LOCKER_ID, role_name="admin", can_open=True)
+        _make_locker_permission(db, self.LOCKER_ID, role_name="admin", permission_level="can_open")
         with patch(
             "src.routes.auth.find_user_by_card_id", new_callable=AsyncMock
         ) as fu, patch(
             "src.routes.auth.get_user_effective_roles", new_callable=AsyncMock
         ) as gr:
-            fu.return_value = {"id": "user-1", "firstName": "Jean", "lastName": "Dupont"}
+            fu.return_value = {"id": "user-1", "firstName": "Jean", "lastName": "Dupont", "enabled": True}
             gr.return_value = ["admin"]
             resp = rpi_client.post(
                 f"/auth/locker/{self.LOCKER_ID}/check",
@@ -443,7 +322,7 @@ class TestLockerAccessCheck:
         assert resp.json()["display_name"] == "Jean Dupont"
 
     def test_display_name_falls_back_to_username(self, rpi_client, db):
-        _make_locker_permission(db, self.LOCKER_ID, role_name="admin", can_open=True)
+        _make_locker_permission(db, self.LOCKER_ID, role_name="admin", permission_level="can_open")
         with patch(
             "src.routes.auth.find_user_by_card_id", new_callable=AsyncMock
         ) as fu, patch(
@@ -454,6 +333,7 @@ class TestLockerAccessCheck:
                 "firstName": "",
                 "lastName": "",
                 "username": "jean.d",
+                "enabled": True,
             }
             gr.return_value = ["admin"]
             resp = rpi_client.post(
@@ -463,13 +343,13 @@ class TestLockerAccessCheck:
         assert resp.json()["display_name"] == "jean.d"
 
     def test_display_name_falls_back_to_unknown(self, rpi_client, db):
-        _make_locker_permission(db, self.LOCKER_ID, role_name="admin", can_open=True)
+        _make_locker_permission(db, self.LOCKER_ID, role_name="admin", permission_level="can_open")
         with patch(
             "src.routes.auth.find_user_by_card_id", new_callable=AsyncMock
         ) as fu, patch(
             "src.routes.auth.get_user_effective_roles", new_callable=AsyncMock
         ) as gr:
-            fu.return_value = {"id": "user-1"}
+            fu.return_value = {"id": "user-1", "enabled": True}
             gr.return_value = ["admin"]
             resp = rpi_client.post(
                 f"/auth/locker/{self.LOCKER_ID}/check",
@@ -480,13 +360,13 @@ class TestLockerAccessCheck:
     def test_access_log_created_on_allowed(self, rpi_client, db):
         from src.models.access_log import AccessLog
 
-        _make_locker_permission(db, self.LOCKER_ID, role_name="admin", can_open=True)
+        _make_locker_permission(db, self.LOCKER_ID, role_name="admin", permission_level="can_open")
         with patch(
             "src.routes.auth.find_user_by_card_id", new_callable=AsyncMock
         ) as fu, patch(
             "src.routes.auth.get_user_effective_roles", new_callable=AsyncMock
         ) as gr:
-            fu.return_value = {"id": "user-log", "firstName": "Test", "lastName": "User"}
+            fu.return_value = {"id": "user-log", "firstName": "Test", "lastName": "User", "enabled": True}
             gr.return_value = ["admin"]
             rpi_client.post(
                 f"/auth/locker/{self.LOCKER_ID}/check",
@@ -505,7 +385,7 @@ class TestLockerAccessCheck:
         ) as fu, patch(
             "src.routes.auth.get_user_effective_roles", new_callable=AsyncMock
         ) as gr:
-            fu.return_value = {"id": "user-2", "username": "bob"}
+            fu.return_value = {"id": "user-2", "username": "bob", "enabled": True}
             gr.return_value = ["membre"]
             rpi_client.post(
                 f"/auth/locker/{self.LOCKER_ID}/check",
@@ -514,193 +394,6 @@ class TestLockerAccessCheck:
         logs = db.query(AccessLog).filter(AccessLog.card_id == hash_card_id("BOB_CARD_DENIED")).all()
         assert len(logs) == 1
         assert logs[0].result == "denied"
-
-
-# ===========================================================================
-# POST /auth/elevate  (require_codir)
-# ===========================================================================
-
-
-class TestElevateToAdmin:
-    def test_codir_elevates_successfully(self, codir_client):
-        with patch("src.routes.auth.add_role_to_user", new_callable=AsyncMock) as m:
-            m.return_value = None
-            resp = codir_client.post("/auth/elevate")
-        assert resp.status_code == 200
-        assert "admin" in resp.json()["message"].lower() or "accordé" in resp.json()["message"]
-        m.assert_called_once_with("codir-456", "admin")
-
-    def test_codir_already_has_admin_returns_message(self, db):
-        """Codir who already has admin role gets an informational 200, no Keycloak call."""
-        from src.core.keycloak import require_codir, validate_jwt
-        from src.database.session import get_db
-        from src.main import app
-        from fastapi.testclient import TestClient
-
-        payload = {
-            "sub": "codir-with-admin",
-            "realm_access": {"roles": ["codir", "admin"]},
-        }
-
-        def override_db():
-            yield db
-
-        app.dependency_overrides[get_db] = override_db
-        app.dependency_overrides[validate_jwt] = lambda: payload
-        app.dependency_overrides[require_codir] = lambda: payload
-
-        try:
-            with TestClient(app) as c:
-                with patch("src.routes.auth.add_role_to_user", new_callable=AsyncMock) as m:
-                    resp = c.post("/auth/elevate")
-        finally:
-            app.dependency_overrides.clear()
-
-        assert resp.status_code == 200
-        assert "déjà" in resp.json()["message"]
-        m.assert_not_called()
-
-    def test_membre_cannot_elevate(self, membre_client):
-        resp = membre_client.post("/auth/elevate")
-        assert resp.status_code == 403
-
-    def test_admin_only_cannot_elevate(self, admin_client):
-        # admin_client has "admin" but NOT "codir" — require_codir should reject it
-        resp = admin_client.post("/auth/elevate")
-        assert resp.status_code == 403
-
-
-# ===========================================================================
-# POST /auth/revoke-admin  (require_admin)
-# ===========================================================================
-
-
-class TestRevokeAdmin:
-    def test_admin_revokes_successfully(self, admin_client):
-        with patch("src.routes.auth.remove_role_from_user", new_callable=AsyncMock) as m:
-            m.return_value = None
-            resp = admin_client.post("/auth/revoke-admin")
-        assert resp.status_code == 200
-        body = resp.json()
-        assert "révoqué" in body["message"] or "revoque" in body["message"].lower()
-        m.assert_called_once_with("admin-123", "admin")
-
-    def test_codir_cannot_revoke(self, codir_client):
-        resp = codir_client.post("/auth/revoke-admin")
-        assert resp.status_code == 403
-
-    def test_membre_cannot_revoke(self, membre_client):
-        resp = membre_client.post("/auth/revoke-admin")
-        assert resp.status_code == 403
-
-
-# ===========================================================================
-# POST/DELETE /users/{user_id}/roles/{role_name}  — permission matrix
-# ===========================================================================
-
-
-@pytest.mark.parametrize(
-    "role,expected_status",
-    [
-        ("membre", 204),
-        ("3d", 204),
-        ("electronique", 403),
-        ("textile", 403),
-        ("materialiste", 403),
-        ("admin", 403),
-        ("codir", 403),
-    ],
-)
-def test_materialiste_role_assignment_matrix(materialiste_client, role, expected_status):
-    with patch("src.routes.roles.add_role_to_user", new_callable=AsyncMock) as m:
-        m.return_value = None
-        resp = materialiste_client.post(f"/users/target-user/roles/{role}")
-    assert resp.status_code == expected_status, (
-        f"Materialiste assigning '{role}': expected {expected_status}, got {resp.status_code}"
-    )
-
-
-@pytest.mark.parametrize(
-    "role,expected_status",
-    [
-        ("membre", 204),
-        ("3d", 204),
-        ("electronique", 204),
-        ("textile", 204),
-        ("materialiste", 204),
-        ("admin", 204),
-        ("codir", 403),
-    ],
-)
-def test_codir_role_assignment_matrix(codir_client, role, expected_status):
-    with patch("src.routes.roles.add_role_to_user", new_callable=AsyncMock) as m:
-        m.return_value = None
-        resp = codir_client.post(f"/users/target-user/roles/{role}")
-    assert resp.status_code == expected_status, (
-        f"Codir assigning '{role}': expected {expected_status}, got {resp.status_code}"
-    )
-
-
-@pytest.mark.parametrize(
-    "role,expected_status",
-    [
-        ("membre", 204),
-        ("3d", 204),
-        ("electronique", 204),
-        ("textile", 204),
-        ("materialiste", 204),
-        ("admin", 204),
-        ("codir", 204),
-    ],
-)
-def test_admin_role_assignment_matrix(admin_client, role, expected_status):
-    with patch("src.routes.roles.add_role_to_user", new_callable=AsyncMock) as m:
-        m.return_value = None
-        resp = admin_client.post(f"/users/target-user/roles/{role}")
-    assert resp.status_code == expected_status, (
-        f"Admin assigning '{role}': expected {expected_status}, got {resp.status_code}"
-    )
-
-
-class TestRoleManagement:
-    def test_unknown_role_returns_400(self, admin_client):
-        resp = admin_client.post("/users/any-user/roles/role-inconnu")
-        assert resp.status_code == 400
-
-    def test_unknown_role_for_materialiste_returns_400(self, materialiste_client):
-        resp = materialiste_client.post("/users/any-user/roles/superpower")
-        assert resp.status_code == 400
-
-    def test_delete_role_materialiste_revokes_membre(self, materialiste_client):
-        with patch("src.routes.roles.remove_role_from_user", new_callable=AsyncMock) as m:
-            m.return_value = None
-            resp = materialiste_client.delete("/users/target-user/roles/membre")
-        assert resp.status_code == 204
-        m.assert_called_once_with("target-user", "membre")
-
-    def test_delete_role_materialiste_cannot_revoke_electronique(self, materialiste_client):
-        resp = materialiste_client.delete("/users/target-user/roles/electronique")
-        assert resp.status_code == 403
-
-    def test_delete_role_codir_can_revoke_electronique(self, codir_client):
-        with patch("src.routes.roles.remove_role_from_user", new_callable=AsyncMock) as m:
-            m.return_value = None
-            resp = codir_client.delete("/users/target-user/roles/electronique")
-        assert resp.status_code == 204
-
-    def test_delete_role_codir_cannot_revoke_codir(self, codir_client):
-        resp = codir_client.delete("/users/target-user/roles/codir")
-        assert resp.status_code == 403
-
-    def test_delete_role_admin_can_revoke_codir(self, admin_client):
-        with patch("src.routes.roles.remove_role_from_user", new_callable=AsyncMock) as m:
-            m.return_value = None
-            resp = admin_client.delete("/users/target-user/roles/codir")
-        assert resp.status_code == 204
-
-    def test_membre_cannot_manage_any_role(self, membre_client):
-        resp = membre_client.post("/users/any-user/roles/membre")
-        assert resp.status_code == 403
 
 
 # ===========================================================================
@@ -797,3 +490,99 @@ class TestSystemEndpoints:
     def test_unknown_route_returns_404(self, client):
         resp = client.get("/this-does-not-exist")
         assert resp.status_code == 404
+
+
+class TestLockerCheckEnabled:
+    """NFC flow must reject account_revoked users (divergence #10)."""
+
+    def test_revoked_account_denied(self, rpi_client, db):
+        """User found in Keycloak but enabled=False → account_revoked."""
+        from src.models.lockers import Lockers
+        locker = Lockers(locker_type="test")
+        db.add(locker); db.flush()
+
+        with patch("src.routes.auth.find_user_by_card_id", new_callable=AsyncMock) as m_find:
+            m_find.return_value = {"id": "user-99", "enabled": False,
+                                   "firstName": "Revoked", "lastName": "User"}
+            resp = rpi_client.post(
+                f"/auth/locker/{locker.id}/check",
+                json={"card_id": "REVOKED_CARD"},
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["allowed"] is False
+        assert data["reason"] == "account_revoked"
+
+    def test_active_account_proceeds(self, rpi_client, db):
+        """User found with enabled=True → normal permission flow."""
+        from src.models.lockers import Lockers
+        from src.models.locker_permission import Locker_Permission
+        locker = Lockers(locker_type="test")
+        db.add(locker); db.flush()
+        perm = Locker_Permission(locker_id=locker.id, role_name="membre", permission_level="can_open")
+        db.add(perm); db.flush()
+
+        with (
+            patch("src.routes.auth.find_user_by_card_id", new_callable=AsyncMock) as m_find,
+            patch("src.routes.auth.get_user_effective_roles", new_callable=AsyncMock) as m_roles,
+        ):
+            m_find.return_value = {"id": "u1", "enabled": True, "firstName": "Active", "lastName": "User"}
+            m_roles.return_value = ["membre"]
+            resp = rpi_client.post(f"/auth/locker/{locker.id}/check", json={"card_id": "ACTIVE_CARD"})
+        assert resp.status_code == 200
+        assert resp.json()["allowed"] is True
+
+
+class TestRemovedEndpoints:
+    def test_elevate_removed(self, codir_client):
+        resp = codir_client.post("/auth/elevate")
+        assert resp.status_code == 404
+
+    def test_revoke_admin_removed(self, admin_client):
+        resp = admin_client.post("/auth/revoke-admin")
+        assert resp.status_code == 404
+
+
+class TestRoleAssignmentDBDriven:
+    """Role assignment uses DB tier logic, not hardcoded map."""
+
+    def test_assign_unknown_role_404(self, admin_client, db):
+        """Role not in DB → 404."""
+        with patch("src.routes.roles.add_role_to_user", new_callable=AsyncMock):
+            resp = admin_client.post("/users/user-x/roles/ghost_role")
+        assert resp.status_code == 404
+
+    def test_assign_same_tier_forbidden(self, codir_client, db):
+        """Codir (T3 is_manager) cannot manage T3 peer (tresorerie)."""
+        from src.models.role import Role
+        db.add(Role(name="tresorerie", label="Trésorerie", tier=3,
+                    is_system=True, is_manager=False, is_role_admin=False, capacities=[]))
+        db.add(Role(name="codir", label="Codir", tier=3,
+                    is_system=True, is_manager=True, is_role_admin=True, capacities=[]))
+        db.commit()
+        with patch("src.routes.roles.add_role_to_user", new_callable=AsyncMock):
+            resp = codir_client.post("/users/user-x/roles/tresorerie")
+        assert resp.status_code == 403
+        assert resp.json()["detail"] == "insufficient_authority"
+
+    def test_assign_lower_tier_allowed(self, admin_client, db):
+        """Admin (T5 is_manager) can manage T3 codir."""
+        from src.models.role import Role
+        db.add(Role(name="admin", label="Admin", tier=5,
+                    is_system=True, is_manager=True, is_role_admin=True, capacities=[]))
+        db.add(Role(name="codir", label="Codir", tier=3,
+                    is_system=True, is_manager=True, is_role_admin=True, capacities=[]))
+        db.commit()
+        with patch("src.routes.roles.add_role_to_user", new_callable=AsyncMock):
+            resp = admin_client.post("/users/user-x/roles/codir")
+        assert resp.status_code == 204
+
+    def test_admin_can_manage_other_admin(self, admin_client, db):
+        """T5 can manage other T5 (special case — no tier above)."""
+        from src.models.role import Role
+        db.add(Role(name="admin", label="Admin", tier=5,
+                    is_system=True, is_manager=True, is_role_admin=True, capacities=[]))
+        db.commit()
+        with patch("src.routes.roles.add_role_to_user", new_callable=AsyncMock):
+            resp = admin_client.post("/users/user-x/roles/admin")
+        assert resp.status_code == 204

@@ -10,13 +10,21 @@ Keycloak integration
 - require_locker_client()         : service account smartlock-lockers
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import httpx
 from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 
 from src.core.config import settings
+from src.database.session import get_db
 from src.utils.logger import logger
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 bearer_scheme = HTTPBearer()
 
@@ -206,5 +214,56 @@ async def require_codir(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Accès réservé aux membres du codir",
+        )
+    return payload
+
+
+# -------------------------------------------------------------------
+# Dependency : réservé aux role admins (is_role_admin=True dans la DB)
+# -------------------------------------------------------------------
+async def require_role_admin(
+    payload: dict = Depends(validate_jwt),
+    db: "Session" = Depends(get_db),
+) -> dict:
+    """Requires caller to have at least one role with is_role_admin=True."""
+    from src.crud.crud_role import get_roles_for_names
+    roles_in_token = payload.get("realm_access", {}).get("roles", [])
+    caller_roles = get_roles_for_names(db, roles_in_token)
+    if not any(r.is_role_admin for r in caller_roles):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès réservé aux administrateurs de rôles",
+        )
+    return payload
+
+
+# -------------------------------------------------------------------
+# Dependency : codir, présidence, admin (lifecycle revoke/restore)
+# -------------------------------------------------------------------
+async def require_lifecycle_manager(
+    payload: dict = Depends(validate_jwt),
+) -> dict:
+    """Codir, Présidence, Admin sys can revoke/restore accounts (hardcoded per CDC)."""
+    roles = payload.get("realm_access", {}).get("roles", [])
+    if not {"codir", "presidence", "admin"}.intersection(roles):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès réservé au Comité de direction, Présidence ou Administrateur système",
+        )
+    return payload
+
+
+# -------------------------------------------------------------------
+# Dependency : présidence et admin (lifecycle hard-delete)
+# -------------------------------------------------------------------
+async def require_lifecycle_admin(
+    payload: dict = Depends(validate_jwt),
+) -> dict:
+    """Only Présidence and Admin sys can hard-delete accounts (hardcoded per CDC)."""
+    roles = payload.get("realm_access", {}).get("roles", [])
+    if not {"presidence", "admin"}.intersection(roles):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès réservé à la Présidence ou à l'Administrateur système",
         )
     return payload

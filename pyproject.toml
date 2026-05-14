@@ -10,10 +10,11 @@ dependencies = [
     "fastapi>=0.128.0",
     "httpx>=0.28.1",
     "loguru>=0.7.3",
+    "pip-audit>=2.10.0",
     "psycopg2-binary>=2.9.11",
     "pydantic>=2.12.5",
     "pydantic-settings>=2.12.0",
-    "python-dotenv>=1.2.1",
+    "python-dotenv>=1.2.2",
     "python-jose[cryptography]>=3.5.0",
     "requests>=2.33.0",
     "slowapi>=0.1.9",
@@ -22,7 +23,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["httpx>=0.28.1", "mypy>=1.19.1", "pytest>=9.0.2", "ruff>=0.15.7"]
+dev = ["httpx>=0.28.1", "mypy>=1.19.1", "pytest>=9.0.3", "ruff>=0.15.7"]
 
 [tool.ruff]
 # On demande à Ruff d'agir comme Black pour le formatage
