@@ -21,6 +21,7 @@ from src.routes import (
     locker_permission,
     lockers,
     roles,
+    roles_crud,
     stock,
     users,
 )
@@ -111,17 +112,28 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     """
     Handle validation errors with logging
     """
+    # Strip non-serializable ctx values (e.g. ValueError objects from Pydantic v2)
+    def _sanitize_errors(errors: list) -> list:
+        sanitized = []
+        for err in errors:
+            e = dict(err)
+            if "ctx" in e:
+                e["ctx"] = {k: str(v) for k, v in e["ctx"].items()}
+            sanitized.append(e)
+        return sanitized
+
+    safe_errors = _sanitize_errors(exc.errors())
     logger.warning(
         f"Validation error on {request.method} {request.url.path}",
         extra={
-            "errors": exc.errors(),
+            "errors": safe_errors,
             "body": exc.body,
         },
     )
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
-            "detail": exc.errors(),
+            "detail": safe_errors,
             "body": exc.body,
         },
     )
@@ -171,7 +183,9 @@ app.include_router(locker_permission.router)
 app.include_router(badge.router)
 app.include_router(auth.router)
 app.include_router(users.router)
+app.include_router(users.lifecycle_router)
 app.include_router(roles.router)
+app.include_router(roles_crud.router)
 app.include_router(access_log.router)
 
 

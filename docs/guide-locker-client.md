@@ -95,22 +95,35 @@ async def check_access(card_id: str) -> dict:
 
 ### Reponse
 
+Quand l'acces est **autorise** :
+
 ```json
 {
   "allowed": true,
   "display_name": "Alice Dupont",
   "reason": null,
   "permissions": {
-    "can_view": true,
-    "can_open": true,
-    "can_edit": false,
-    "can_take": false,
-    "can_manage": false
+    "permission_level": "can_open"
   }
 }
 ```
 
+Quand l'acces est **refuse** :
+
+```json
+{
+  "allowed": false,
+  "display_name": "Bob Martin",
+  "reason": "no_permission",
+  "permissions": null
+}
+```
+
+Le champ `permissions.permission_level` vaut `"can_view"`, `"can_open"` ou `"can_edit"`. Les deux derniers donnent acces physique au casier.
+
 ### Logique de decision
+
+Le champ `allowed` encapsule deja la decision — il suffit de le tester :
 
 ```python
 result = await check_access(card_id)
@@ -124,6 +137,8 @@ else:
     reason = result.get("reason", "unknown")
     if reason == "card_not_registered":
         display_message("Badge inconnu")
+    elif reason == "account_revoked":
+        display_message("Acces suspendu")
     elif reason == "keycloak_error":
         display_message("Erreur serveur, reessayez")
     else:
@@ -135,8 +150,9 @@ else:
 | Reason | Signification | Action suggeree |
 |---|---|---|
 | `card_not_registered` | Le badge n'est associe a aucun utilisateur Keycloak | Afficher "Badge inconnu" |
+| `account_revoked` | Le compte de l'utilisateur a ete desactive par un admin | Afficher "Acces suspendu" |
 | `keycloak_error` | Erreur de communication avec Keycloak | Reessayer apres quelques secondes |
-| `no_permission` | L'utilisateur n'a pas la permission `can_open` sur ce casier | Afficher "Acces refuse" |
+| `no_permission` | L'utilisateur n'a pas de permission `can_open` ou `can_edit` sur ce casier | Afficher "Acces refuse" |
 
 ---
 

@@ -21,9 +21,12 @@ from src.core.keycloak import (
     require_admin,
     require_codir,
     require_codir_or_admin,
+    require_lifecycle_admin,
+    require_lifecycle_manager,
     require_locker_client,
     require_materialiste_or_above,
     require_nfc_scanner,
+    require_role_admin,
     validate_jwt,
 )
 from src.database.base import Base
@@ -109,6 +112,9 @@ def admin_client(db):
         require_admin: lambda: p,
         require_codir_or_admin: lambda: p,
         require_materialiste_or_above: lambda: p,
+        require_role_admin: lambda: p,
+        require_lifecycle_manager: lambda: p,
+        require_lifecycle_admin: lambda: p,
     })
 
 
@@ -120,6 +126,7 @@ def codir_client(db):
         require_codir: lambda: p,
         require_codir_or_admin: lambda: p,
         require_materialiste_or_above: lambda: p,
+        require_lifecycle_manager: lambda: p,
     })
 
 

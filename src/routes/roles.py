@@ -1,44 +1,38 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
-from src.core.keycloak import (
-    ROLE_CODIR,
-    ROLES_MANAGED_BY_ADMIN_ONLY,
-    ROLES_MANAGED_BY_CODIR,
-    ROLES_MANAGED_BY_MATERIALISTE,
-    ROLE_ADMIN,
-    ROLE_MATERIALISTE,
-    require_materialiste_or_above,
-    validate_jwt,
-)
+from src.core.keycloak import validate_jwt
 from src.core.keycloak_admin import add_role_to_user, remove_role_from_user
+from src.crud.crud_role import get_role_by_name, get_roles_for_names
+from src.database.session import get_db
 from src.utils.logger import logger
 
-router = APIRouter(
-    prefix="/users",
-    tags=["Role Management"],
-)
-
-# Permission map: role_name → minimum set of roles allowed to manage it
-_ROLE_MANAGER_MAP: dict[str, set[str]] = {
-    **{r: {ROLE_MATERIALISTE, ROLE_CODIR, ROLE_ADMIN} for r in ROLES_MANAGED_BY_MATERIALISTE},
-    **{r: {ROLE_CODIR, ROLE_ADMIN} for r in ROLES_MANAGED_BY_CODIR},
-    **{r: {ROLE_ADMIN} for r in ROLES_MANAGED_BY_ADMIN_ONLY},
-}
+router = APIRouter(prefix="/users", tags=["Role Management"])
 
 
-def _check_can_manage_role(requester_roles: list[str], target_role: str) -> None:
-    """Raise 403 if the requester cannot manage the target role."""
-    allowed = _ROLE_MANAGER_MAP.get(target_role)
-    if allowed is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Rôle '{target_role}' inconnu ou non gérable via cette API.",
-        )
-    if not allowed.intersection(requester_roles):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Vous n'avez pas le droit de gérer le rôle '{target_role}'.",
-        )
+def _check_can_manage_role(
+    caller_roles_in_token: list[str],
+    target_role_name: str,
+    db: Session,
+) -> None:
+    """
+    Raise 403 if caller cannot manage target role.
+    Rule: caller must have is_manager=True AND tier > target.tier.
+    Special case: T5 caller can manage another T5 (no tier above T5).
+    """
+    target = get_role_by_name(db, target_role_name)
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Rôle '{target_role_name}' inconnu")
+
+    caller_db_roles = get_roles_for_names(db, caller_roles_in_token)
+    can_manage = any(
+        r.is_manager and (r.tier > target.tier or (r.tier == 5 and target.tier == 5))
+        for r in caller_db_roles
+    )
+    if not can_manage:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="insufficient_authority")
 
 
 @router.post(
@@ -49,23 +43,18 @@ def _check_can_manage_role(requester_roles: list[str], target_role: str) -> None
 async def assign_role(
     user_id: str,
     role_name: str,
-    payload: dict = Depends(require_materialiste_or_above),
+    payload: dict = Depends(validate_jwt),
+    db: Session = Depends(get_db),
 ):
-    """
-    Attribue un rôle realm Keycloak à un utilisateur.
-
-    Permissions requises selon le rôle cible :
-    - membre, 3d       → matérialiste, codir, admin
-    - electronique, textile, materialiste, admin → codir, admin
-    - codir            → admin uniquement
-    """
-    requester_roles = payload.get("realm_access", {}).get("roles", [])
-    _check_can_manage_role(requester_roles, role_name)
-
-    await add_role_to_user(user_id, role_name)
-    logger.info(
-        f"Rôle '{role_name}' attribué à {user_id} par {payload.get('sub')}"
-    )
+    caller_roles = payload.get("realm_access", {}).get("roles", [])
+    _check_can_manage_role(caller_roles, role_name, db)
+    try:
+        await add_role_to_user(user_id, role_name)
+    except HTTPException as e:
+        if e.status_code == 409:
+            return  # Already has role — silent no-op per CDC
+        raise
+    logger.info(f"Rôle '{role_name}' attribué à {user_id} par {payload.get('sub')}")
 
 
 @router.delete(
@@ -76,20 +65,10 @@ async def assign_role(
 async def revoke_role(
     user_id: str,
     role_name: str,
-    payload: dict = Depends(require_materialiste_or_above),
+    payload: dict = Depends(validate_jwt),
+    db: Session = Depends(get_db),
 ):
-    """
-    Retire un rôle realm Keycloak d'un utilisateur.
-
-    Permissions requises selon le rôle cible :
-    - membre, 3d       → matérialiste, codir, admin
-    - electronique, textile, materialiste, admin → codir, admin
-    - codir            → admin uniquement
-    """
-    requester_roles = payload.get("realm_access", {}).get("roles", [])
-    _check_can_manage_role(requester_roles, role_name)
-
+    caller_roles = payload.get("realm_access", {}).get("roles", [])
+    _check_can_manage_role(caller_roles, role_name, db)
     await remove_role_from_user(user_id, role_name)
-    logger.info(
-        f"Rôle '{role_name}' révoqué de {user_id} par {payload.get('sub')}"
-    )
+    logger.info(f"Rôle '{role_name}' révoqué de {user_id} par {payload.get('sub')}")

@@ -204,48 +204,39 @@ await api("DELETE", `/stock/${id}`);
 
 ## 6. Gestion des permissions de casier
 
-Les permissions definissent qui peut acceder a quel casier. Il y a deux types :
+Les permissions definissent quel role peut acceder a quel casier. Chaque permission est **par role uniquement** (plus de surcharge par utilisateur individuel).
 
-- **role** : s'applique a tous les utilisateurs ayant ce role Keycloak
-- **user** : s'applique a un utilisateur specifique (surcharge les permissions role)
+Trois niveaux disponibles, ordonnes par privilege croissant :
+
+| `permission_level` | Acces physique | Peut modifier le contenu |
+|---|---|---|
+| `can_view` | Non | Non |
+| `can_open` | **Oui** | Non |
+| `can_edit` | **Oui** | Oui |
 
 ```javascript
 // Voir les permissions d'un casier
-const perms = await api(
-  "GET",
-  `/lockers/${lockerId}/permissions`
-);
+const perms = await api("GET", `/lockers/${lockerId}/permissions`);
+// => [{ id, locker_id, role_name, permission_level, valid_until, created_at }]
 
-// Ajouter une permission par role
+// Ajouter une permission
 await api("POST", `/lockers/${lockerId}/permissions`, {
   locker_id: lockerId,
-  subject_type: "role",
-  role_name: "3D",
-  can_view: true,
-  can_open: true,
-  can_edit: false,
-  can_take: true,
-  can_manage: false,
-  valid_until: "2025-12-31T23:59:59", // optionnel
+  role_name: "bureau",
+  permission_level: "can_open",
+  valid_until: "2025-12-31T23:59:59", // optionnel — acces temporaire
 });
 
-// Ajouter une permission par utilisateur
-await api("POST", `/lockers/${lockerId}/permissions`, {
-  locker_id: lockerId,
-  subject_type: "user",
-  user_id: "keycloak-uuid-here",
-  can_view: true,
-  can_open: true,
-});
-
-// Modifier
+// Modifier le niveau d'acces
 await api("PUT", `/lockers/permissions/${permId}`, {
-  can_open: false,
+  permission_level: "can_edit",
 });
 
 // Supprimer
 await api("DELETE", `/lockers/permissions/${permId}`);
 ```
+
+Le champ `(locker_id, role_name)` est unique : un role ne peut avoir qu'une seule entree par casier. Pour changer le niveau, utiliser PUT.
 
 ### Logique de resolution des permissions
 
@@ -253,9 +244,8 @@ Lors d'un scan de badge (`POST /auth/locker/{id}/check`), le systeme :
 
 1. Identifie l'utilisateur via le `card_id` dans Keycloak
 2. Recupere ses roles Keycloak
-3. Consolide toutes les permissions **role** correspondantes (OR logique)
-4. Si une permission **user** specifique existe, elle **remplace** les permissions role
-5. L'acces est autorise si `can_open` est `true`
+3. Prend le `permission_level` **le plus eleve** parmi tous ses roles (hierarchie : `can_view` < `can_open` < `can_edit`)
+4. L'acces physique est autorise si le niveau effectif est `can_open` ou `can_edit`
 
 ---
 
@@ -310,26 +300,158 @@ Chaque log contient :
 
 ---
 
-## 9. Utilisateurs et groupes (lecture seule)
+## 9. Utilisateurs et groupes
 
-La gestion des utilisateurs et groupes se fait **exclusivement via l'interface Keycloak**. L'API expose uniquement des endpoints de lecture :
+### Lecture
 
 ```javascript
-// Lister les utilisateurs
+// Lister les utilisateurs (pagination)
 const users = await api("GET", "/users?max_results=50");
 
-// Rechercher un utilisateur
+// Rechercher un utilisateur par nom / email
 const results = await api("GET", "/users?search=alice");
+
+// Detail d'un utilisateur
+const user = await api("GET", "/users/keycloak-uuid");
+
+// Roles actuels d'un utilisateur
+const roles = await api("GET", "/users/keycloak-uuid/roles");
+// => ["membre", "bureau"]
 
 // Lister les groupes
 const groups = await api("GET", "/groups");
 ```
 
-Pour modifier un utilisateur (role, groupe, badge) : utiliser l'interface d'administration Keycloak directement.
+### Cycle de vie (revocation / suppression)
+
+Ces actions modifient le compte Keycloak directement via l'API :
+
+```javascript
+// Revoquer un compte (desactiver — l'utilisateur ne peut plus s'authentifier)
+// Requis : role lifecycle_manager (codir, presidence, admin)
+await api("POST", `/users/${userId}/revoke`);
+
+// Restaurer un compte revoqu
+// Requis : role lifecycle_manager
+await api("POST", `/users/${userId}/restore`);
+
+// Supprimer definitivement un compte (irreversible)
+// Requis : role lifecycle_admin (presidence, admin uniquement)
+await api("DELETE", `/users/${userId}`);
+```
+
+| Action | Role requis | Reversible |
+|---|---|---|
+| revoke | `codir`, `presidence` ou `admin` | Oui (via restore) |
+| restore | `codir`, `presidence` ou `admin` | — |
+| delete | `presidence` ou `admin` | **Non** |
+
+Un utilisateur revoqu verrait son badge refus avec la raison `account_revoked` a la borne physique.
+
+Pour la creation de comptes et l'assignation de badges : utiliser l'interface d'administration Keycloak directement.
 
 ---
 
-## 10. Gestion des erreurs
+## 10. Gestion des roles
+
+Les roles controlent qui peut acceder a quoi et qui peut gerer d'autres utilisateurs. Il existe des **roles systeme** (non supprimables, seedes en base) et des **roles custom** crees par les admins.
+
+### Roles systeme
+
+| Nom | Tier | is_manager | is_role_admin | Capacites |
+|---|---|---|---|---|
+| `admin` | T5 | oui | oui | create_lockers, configure_system, audit_log_full |
+| `presidence` | T4 | oui | oui | audit_log_full, cascade_delete_role |
+| `codir` | T3 | oui | oui | audit_log_full |
+| `tresorerie` | T3 | non | non | purchase_orders, manage_suppliers |
+| `bureau` | T2 | oui | non | — |
+| `membre` | T0 | non | non | — |
+
+### Lister les roles
+
+```javascript
+// Accessible a tout utilisateur authentifie
+const roles = await api("GET", "/roles");
+// => [{ id, name, label, tier, is_system, is_manager, is_role_admin, capacities }]
+```
+
+### Creer un role custom
+
+Requis : `is_role_admin=true` dans le token. Le tier du nouveau role ne peut pas depasser le tier du createur.
+
+```javascript
+const newRole = await api("POST", "/roles", {
+  name: "agent_fdm",
+  label: "Agent FDM",
+  tier: 1,
+  is_manager: false,
+  is_role_admin: false,
+  capacities: [],
+});
+// => 201 Created + objet RoleResponse
+```
+
+Capacites disponibles : `create_lockers`, `configure_system`, `audit_log_full`, `purchase_orders`, `manage_suppliers`, `cascade_delete_role`, `validate_catalog`, `manage_stock_thresholds`.
+
+### Modifier un role
+
+```javascript
+// Pour les roles custom : label, is_manager, is_role_admin, capacities
+// Pour les roles systeme : label uniquement
+await api("PUT", `/roles/${roleName}`, {
+  label: "Agent Impression 3D",
+  is_manager: true,
+});
+```
+
+### Supprimer un role custom
+
+```javascript
+// Echoue avec 409 si des utilisateurs ont encore ce role (sauf cascade=true)
+await api("DELETE", `/roles/${roleName}`);
+
+// Cascade : retire le role de tous les utilisateurs avant suppression
+// Requis : presidence ou admin
+await api("DELETE", `/roles/${roleName}?cascade=true`);
+```
+
+Erreurs possibles :
+
+| Code | Detail | Signification |
+|---|---|---|
+| `403` | `system_role_not_deletable` | Impossible de supprimer un role systeme |
+| `409` | `role_in_use` | Des utilisateurs ont encore ce role — utiliser `?cascade=true` |
+| `403` | `self_destruction_forbidden` | L'appelant ne peut pas supprimer son seul role `is_role_admin` |
+
+---
+
+## 11. Attribution des roles aux utilisateurs
+
+L'attribution d'un role a un utilisateur suit la **hierarchie de tier** : l'appelant doit avoir `is_manager=true` ET un tier **strictement superieur** a celui du role cible (exception : T5 peut gerer T5).
+
+```javascript
+// Attribuer un role
+// => 204 No Content (idempotent : si l'utilisateur a deja le role, no-op silencieux)
+await api("POST", `/users/${userId}/roles/${roleName}`);
+
+// Revoquer un role
+// => 204 No Content
+await api("DELETE", `/users/${userId}/roles/${roleName}`);
+```
+
+Exemples de controles d'acces :
+
+| Appelant | Role cible | Resultat |
+|---|---|---|
+| `admin` (T5, is_manager) | `codir` (T3) | Autorise |
+| `codir` (T3, is_manager) | `bureau` (T2) | Autorise |
+| `codir` (T3, is_manager) | `tresorerie` (T3) | **Refuse** — meme tier |
+| `bureau` (T2, is_manager) | `membre` (T0) | Autorise |
+| `membre` (T0, pas is_manager) | n'importe quel role | **Refuse** |
+
+---
+
+## 12. Gestion des erreurs
 
 ```javascript
 try {

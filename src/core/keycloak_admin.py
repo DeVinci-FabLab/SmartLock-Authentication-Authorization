@@ -305,3 +305,116 @@ async def remove_role_from_user(user_id: str, role_name: str) -> None:
         _handle_keycloak_error(e, f"remove_role_from_user({user_id}, {role_name})")
 
     logger.info(f"Rôle '{role_name}' retiré de l'utilisateur {user_id}")
+
+
+# ── Gestion du cycle de vie des utilisateurs ──────────────────────────────────
+
+
+async def set_user_enabled(user_id: str, enabled: bool) -> None:
+    """Met à jour le flag enabled d'un utilisateur Keycloak (revoke / restore)."""
+    token = await get_admin_token()
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.put(
+                f"{_admin_base()}/users/{user_id}",
+                json={"enabled": enabled},
+                headers=_auth_headers(token),
+            )
+            resp.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        _handle_keycloak_error(e, f"set_user_enabled({user_id}, {enabled})")
+    logger.info(f"Utilisateur {user_id} — enabled={enabled}")
+
+
+async def delete_keycloak_user(user_id: str) -> None:
+    """Supprime définitivement un utilisateur de Keycloak (hard delete)."""
+    token = await get_admin_token()
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.delete(
+                f"{_admin_base()}/users/{user_id}",
+                headers=_auth_headers(token),
+            )
+            resp.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        _handle_keycloak_error(e, f"delete_keycloak_user({user_id})")
+    logger.info(f"Utilisateur {user_id} supprimé définitivement de Keycloak")
+
+
+# ── CRUD rôles Keycloak ────────────────────────────────────────────────────────
+
+
+async def create_realm_role(name: str, description: str = "") -> None:
+    """Crée un rôle realm dans Keycloak."""
+    token = await get_admin_token()
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{_admin_base()}/roles",
+                json={"name": name, "description": description},
+                headers=_auth_headers(token),
+            )
+            resp.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        _handle_keycloak_error(e, f"create_realm_role({name})")
+    logger.info(f"Rôle Keycloak '{name}' créé")
+
+
+async def update_realm_role(name: str, new_description: str) -> None:
+    """Met à jour la description d'un rôle realm Keycloak."""
+    token = await get_admin_token()
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.put(
+                f"{_admin_base()}/roles/{name}",
+                json={"name": name, "description": new_description},
+                headers=_auth_headers(token),
+            )
+            resp.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        _handle_keycloak_error(e, f"update_realm_role({name})")
+
+
+async def delete_realm_role(name: str) -> None:
+    """Supprime un rôle realm de Keycloak."""
+    token = await get_admin_token()
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.delete(
+                f"{_admin_base()}/roles/{name}",
+                headers=_auth_headers(token),
+            )
+            resp.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        _handle_keycloak_error(e, f"delete_realm_role({name})")
+    logger.info(f"Rôle Keycloak '{name}' supprimé")
+
+
+async def get_users_with_role(role_name: str) -> list[dict]:
+    """Retourne la liste des utilisateurs qui ont le rôle donné."""
+    token = await get_admin_token()
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{_admin_base()}/roles/{role_name}/users",
+                headers=_auth_headers(token),
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.HTTPStatusError as e:
+        _handle_keycloak_error(e, f"get_users_with_role({role_name})")
+
+
+async def get_user_roles(user_id: str) -> list[str]:
+    """Retourne la liste des noms de rôles realm assignés directement à l'utilisateur."""
+    token = await get_admin_token()
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{_admin_base()}/users/{user_id}/role-mappings/realm",
+                headers=_auth_headers(token),
+            )
+            resp.raise_for_status()
+            return [r["name"] for r in resp.json()]
+    except httpx.HTTPStatusError as e:
+        _handle_keycloak_error(e, f"get_user_roles({user_id})")
