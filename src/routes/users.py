@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.core.keycloak import (
     require_admin,
@@ -75,6 +75,8 @@ async def revoke_user(
     user_id: str,
     payload: dict = Depends(require_lifecycle_manager),
 ):
+    if user_id == payload.get("sub"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="self_revocation_forbidden")
     await set_user_enabled(user_id, False)
     logger.info(f"Compte {user_id} révoqué par {payload.get('sub')}")
 
@@ -88,6 +90,8 @@ async def restore_user(
     user_id: str,
     payload: dict = Depends(require_lifecycle_manager),
 ):
+    if user_id == payload.get("sub"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="self_restore_forbidden")
     await set_user_enabled(user_id, True)
     logger.info(f"Compte {user_id} restauré par {payload.get('sub')}")
 

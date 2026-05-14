@@ -19,12 +19,11 @@ def upgrade() -> None:
     op.add_column("locker_permissions", sa.Column("permission_level", sa.String(20), nullable=True))
 
     # 2. Backfill: can_edit wins > can_open > can_view (hierarchical)
-    # Use 1 instead of TRUE for SQLite compatibility
     op.execute("""
         UPDATE locker_permissions
         SET permission_level = CASE
-            WHEN can_edit  = 1 THEN 'can_edit'
-            WHEN can_open  = 1 THEN 'can_open'
+            WHEN can_edit  = TRUE THEN 'can_edit'
+            WHEN can_open  = TRUE THEN 'can_open'
             ELSE 'can_view'
         END
     """)
@@ -32,12 +31,14 @@ def upgrade() -> None:
     # 3. Make NOT NULL
     op.alter_column("locker_permissions", "permission_level", nullable=False)
 
-    # 4. Drop old boolean and user-override columns
+    # 4. Drop old unique constraint before dropping its columns
+    op.drop_constraint("unique_permission_target", "locker_permissions", type_="unique")
+
+    # 5. Drop old boolean and user-override columns
     for col in ("can_view", "can_open", "can_edit", "can_manage", "subject_type", "user_id"):
         op.drop_column("locker_permissions", col)
 
-    # 5. Drop old unique constraint, recreate cleaner one
-    op.drop_constraint("unique_permission_target", "locker_permissions", type_="unique")
+    # Recreate cleaner unique constraint
     op.create_unique_constraint("unique_permission_role_locker", "locker_permissions", ["locker_id", "role_name"])
 
     # 6. Recreate role_name index

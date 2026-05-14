@@ -30,3 +30,13 @@ class TestUserLifecycle:
             resp = admin_client.delete("/users/user-1")
         assert resp.status_code == 204
         m.assert_called_once_with("user-1")
+
+    def test_self_revoke_forbidden(self, admin_client):
+        resp = admin_client.post("/users/admin-123/revoke")
+        assert resp.status_code == 403
+        assert resp.json()["detail"] == "self_revocation_forbidden"
+
+    def test_self_restore_forbidden(self, codir_client):
+        resp = codir_client.post("/users/codir-456/restore")
+        assert resp.status_code == 403
+        assert resp.json()["detail"] == "self_restore_forbidden"
